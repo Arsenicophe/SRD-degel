@@ -34,7 +34,7 @@ déconnexion, les sessions sont limitées en durée.
 
 | Quoi | Où |
 |---|---|
-| Code | GitHub `Arsenicophe/srd-degel` ; Colab le clone à chaque session |
+| Code | GitHub `Arsenicophe/SRD-degel` ; Colab le clone à chaque session |
 | CelebA | Google Drive (compte d'Arsène), un seul zip, copié et décompressé à chaque session |
 | Cache des images (carrés de 128 px) | disque local de Colab, reconstruit à chaque session |
 | Résultats des runs | Google Drive, `MyDrive/srd-degel/runs/` |

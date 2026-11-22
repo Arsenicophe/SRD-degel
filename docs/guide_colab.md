@@ -11,12 +11,12 @@ Sur le Mac, dans un terminal :
 
 ```bash
 cd ~/Projets/SRD-degel
-git remote add origin https://github.com/Arsenicophe/srd-degel.git
+git remote add origin https://github.com/Arsenicophe/SRD-degel.git
 git push -u origin main
 ```
 
 3. Ouvrir le notebook dans Colab :
-   <https://colab.research.google.com/github/Arsenicophe/srd-degel/blob/main/notebooks/colab.ipynb>
+   <https://colab.research.google.com/github/Arsenicophe/SRD-degel/blob/main/notebooks/colab.ipynb>
 
 ## 1. À chaque session Colab
 
