@@ -35,7 +35,7 @@ checkpoint_every: 1                 # point de reprise sur Drive toutes les N é
 num_workers: auto                   # processus de lecture des lots ; auto = min(8, cœurs − 1)
 
 pilot: {epochs: 1, seed: 100}       # réglages au centre des plages
-tune: {n_trials: 10, epochs: 20, seed: 100, keep_weights: false}
+tune: {n_trials: 10, epochs: 15, seed: 100, keep_weights: false}   # 15 : budget (22 nov.)
 final: {epochs: 30, seeds: [0, 1, 2]}
 
 # Plages de réglage ([min, max] linéaire, [min, max, log] logarithmique), fixées le 2026-11-22.

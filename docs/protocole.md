@@ -275,7 +275,7 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
     Musgrave.
 - **Évolution du taux** : montée linéaire pendant la **1re époque** (de presque
   0 à sa valeur), puis **décroissance en cosinus** jusqu'à 0 sur la durée
-  prévue de l'entraînement (20 époques au réglage, 30 au final). La recette
+  prévue de l'entraînement (15 époques au réglage, 30 au final). La recette
   d'origine (division par 10 aux époques 30 et 60 sur 90) ne peut pas être
   gardée telle quelle avec 20 ou 30 époques.
 - **Augmentations** (entraînement seulement), les mêmes pour les 4 pertes,
@@ -313,7 +313,7 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
   plages linéaires, moyenne géométrique pour les plages logarithmiques),
   graine 100. **[à valider]**
 - Cette époque est exactement la première époque d'un tirage de réglage : montée
-  du taux pendant l'époque, cosinus calculé sur les 20 époques d'un tirage.
+  du taux pendant l'époque, cosinus calculé sur les 15 époques d'un tirage.
 - Sorties : durée d'une époque, MAP@R de validation après une époque comparé au
   brut (ACP 128), estimation du temps total du réglage et des entraînements
   finaux.
@@ -325,8 +325,9 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
 
 - **Méthode** : tirage au hasard dans des plages **fixées avant tout
   lancement**.
-- **Budget** : **10 tirages par perte**, **20 époques au plus par tirage**
-  (valeur de départ, ajustable selon le pilote, la même pour les 4 pertes).
+- **Budget** : **10 tirages par perte**, **15 époques au plus par tirage**
+  (20 au départ ; ramené à 15 le 22 novembre pour le budget : environ 62 unités
+  de calcul et 16 h avec 2 sessions L4 ; la même valeur pour les 4 pertes).
 - **Graine de réglage : 100**, pour les tirages et pour l'entraînement.
 - **Critère** : meilleur **MAP@R en validation** (meilleure époque du tirage).
 - **Tirage qui diverge** (perte non finie, ou réseau qui ne sort plus que des
@@ -516,9 +517,9 @@ conditions proches de son article d'origine.
 
 ## 13. Calcul et pratique sur Colab
 
-- **Volume prévu** : pilote 4 époques ; réglage 10 tirages × 4 pertes × 20
-  époques = 800 époques au plus ; final 4 pertes × 3 graines × 30 époques = 360
-  époques au plus. Environ 1 165 époques au plus, moins avec l'arrêt précoce.
+- **Volume prévu** : pilote 4 époques ; réglage 10 tirages × 4 pertes × 15
+  époques = 600 époques au plus ; final 4 pertes × 3 graines × 30 époques = 360
+  époques au plus. Environ 965 époques au plus, moins avec l'arrêt précoce.
   Budget recalculé avec la durée mesurée dans le pilote.
 - **Où sont les choses** :
   - code : dépôt GitHub `srd-degel`, cloné à chaque session ;
@@ -600,3 +601,4 @@ conditions proches de son article d'origine.
 | 2026-11-22 | Après l'essai réel sur le Mac et la relecture du code : tirage divergé consigné sans arrêter le réglage ; pilote = première époque d'un tirage ; essais rapides à part ; garde du test renforcée ; précision float16 sur T4 ; journal par run ; points [à valider] ajoutés (sections 7, 8, 11, 13) |
 | 2026-11-22 | Section 11 : réglages des méthodes classiques décidés (délégation d'Arsène) : Eigenfaces ACP 128, Fisherfaces ACP 512 puis LDA 128, en gris 64 × 64 ; LBP(8, 2) uniforme, grille 7 × 7, sur le carré de 128 px ; limite ajoutée en section 14 |
 | 2026-11-22 | Pilotes sur Colab (T4, puis L4) : effondrement de nsoftmax et arcface avec la recette du ResNet-18 ; 11 variantes mesurées (`runs/variantes/`). Recette retenue (section 7) : recette commune de l'essai du 17 novembre (dropout + linéaire, augmentations légères, SGD Nesterov, weight decay 5e-4, réseau × 0,3, écrêtage 5) ; lots 256 × 1 et tête avec BatchNorm pour nsoftmax et arcface, lots 64 × 4 et tête sans BatchNorm pour contrastive et triplet ; plages resserrées pour nsoftmax et arcface (section 8). Décision d'Arsène |
+| 2026-11-22 | Section 8 : 15 époques au plus par tirage de réglage au lieu de 20, pour le budget (environ 2 min par époque sur L4, 1,94 unité par heure, 94 unités disponibles). Graines finales inchangées (30 époques). Décision d'Arsène |
