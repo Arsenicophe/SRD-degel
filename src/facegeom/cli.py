@@ -22,7 +22,25 @@ def parser(doc: str) -> argparse.ArgumentParser:
     p.add_argument("--device", default=default_device())
     p.add_argument("--allow-cpu", action="store_true",
                    help="autoriser un entraînement sans carte graphique (très lent)")
+    p.add_argument("--set", action="append", default=[], metavar="CLÉ=VALEUR",
+                   help="remplace une valeur de configs/train.yaml (ex. grad_clip_norm=5) ; "
+                        "noté dans meta.json et dans la recette de chaque run")
     return p
+
+
+def apply_overrides(cfg: dict, items: list[str]) -> dict:
+    """``clé=valeur`` (clé pointée pour les sous-sections), valeur lue en YAML."""
+    import yaml
+
+    for item in items:
+        key, _, raw = item.partition("=")
+        if not key or not _:
+            raise SystemExit(f"--set attend CLÉ=VALEUR, reçu « {item} »")
+        node, parts = cfg, key.split(".")
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = yaml.safe_load(raw)
+    return cfg
 
 
 def check_device(args) -> None:
@@ -34,8 +52,8 @@ def check_device(args) -> None:
 
 def load_configs(args) -> tuple[dict, dict, dict]:
     """Configurations données, entraînement et évaluation."""
-    return (load_config(args.data_config), load_config(args.train_config),
-            load_config(args.eval_config))
+    tcfg = apply_overrides(load_config(args.train_config), getattr(args, "set", []))
+    return load_config(args.data_config), tcfg, load_config(args.eval_config)
 
 
 def require_baselines(runs_dir: str | Path) -> dict:

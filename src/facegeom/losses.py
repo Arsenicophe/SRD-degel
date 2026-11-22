@@ -15,12 +15,22 @@ LOSSES = ("nsoftmax", "arcface", "contrastive", "triplet")
 WEIGHTED = ("nsoftmax", "arcface")
 
 
-def make_loss(name: str, params: dict, n_classes: int, dim: int):
-    """Perte et mineur éventuel (triplets semi-difficiles pour ``triplet``)."""
+def make_loss(name: str, params: dict, n_classes: int, dim: int,
+              weight_init_std: float | None = None):
+    """Perte et mineur éventuel (triplets semi-difficiles pour ``triplet``).
+
+    ``weight_init_std`` : écart-type de l'initialisation des poids propres de
+    ``nsoftmax`` et ``arcface`` (une ligne par personne). ``None`` garde celle de
+    la bibliothèque (loi normale d'écart-type 1).
+    """
+    init = (None if weight_init_std is None
+            else (lambda w: torch.nn.init.normal_(w, std=float(weight_init_std))))
     if name == "nsoftmax":
-        return losses.NormalizedSoftmaxLoss(n_classes, dim, temperature=1 / params["s"]), None
+        return losses.NormalizedSoftmaxLoss(n_classes, dim, temperature=1 / params["s"],
+                                            weight_init_func=init), None
     if name == "arcface":
-        return losses.ArcFaceLoss(n_classes, dim, margin=params["m"], scale=params["s"]), None
+        return losses.ArcFaceLoss(n_classes, dim, margin=params["m"], scale=params["s"],
+                                  weight_init_func=init), None
     if name == "contrastive":
         return losses.ContrastiveLoss(pos_margin=params["pos_margin"],
                                       neg_margin=params["neg_margin"]), None

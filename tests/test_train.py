@@ -276,3 +276,10 @@ def test_gradient_clipping_option_changes_training(tmp_path, data):
     assert clipped["best_map_at_r"] != ref["best_map_at_r"] or not torch.equal(
         torch.load(tmp_path / "ref" / "best.pt", weights_only=True)["head.weight"],
         torch.load(tmp_path / "clip" / "best.pt", weights_only=True)["head.weight"])
+
+
+def test_cli_overrides_are_applied():
+    from facegeom.cli import apply_overrides
+
+    cfg = apply_overrides({"a": 1, "b": {"c": 2}}, ["a=5", "b.c=null", "d=0.01"])
+    assert cfg == {"a": 5, "b": {"c": None}, "d": 0.01}

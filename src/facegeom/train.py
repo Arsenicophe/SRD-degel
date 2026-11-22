@@ -90,7 +90,8 @@ def build_optimizer(model: EmbeddingNet, loss_fn, loss_name: str, params: dict,
 
 
 RECIPE_KEYS = ("backbone", "head", "batch", "optimizer", "schedule",
-               "arcface_margin_warmup_epochs", "augment", "early_stopping", "grad_clip_norm")
+               "arcface_margin_warmup_epochs", "augment", "early_stopping", "grad_clip_norm",
+               "loss_weight_init_std")
 
 
 def run_identity(tcfg: dict, dcfg: dict, loss_name: str, params: dict, seed: int, epochs: int,
@@ -214,7 +215,8 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
                          hcfg["out_dim"]).to(dev)
     if channels_last:
         model = model.to(memory_format=torch.channels_last)
-    loss_fn, miner = make_loss(loss_name, params, data.n_classes, hcfg["out_dim"])
+    loss_fn, miner = make_loss(loss_name, params, data.n_classes, hcfg["out_dim"],
+                               tcfg.get("loss_weight_init_std"))
     loss_fn = loss_fn.to(dev)
     optimizer = build_optimizer(model, loss_fn, loss_name, params, tcfg)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
