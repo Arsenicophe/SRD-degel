@@ -5,7 +5,7 @@ backbone:
   description: ResNet-18 supervisé ImageNet, torchvision IMAGENET1K_V1
   url: https://download.pytorch.org/models/resnet18-f37072fd.pth
   sha256: f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec
-head: {in_dim: 512, out_dim: 128}   # une couche linéaire puis normalisation L2
+head: {in_dim: 512, out_dim: 128, batchnorm: false}   # linéaire (+ BatchNorm si true), puis L2 [à valider]
 
 batch: {classes_per_batch: 64, images_per_class: 4}   # 256 images, même composition pour les 4 pertes
 

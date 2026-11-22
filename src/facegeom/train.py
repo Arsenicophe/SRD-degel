@@ -212,7 +212,7 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
 
     set_seed(seed)
     model = EmbeddingNet(load_backbone(tcfg["backbone"], pretrained), hcfg["in_dim"],
-                         hcfg["out_dim"]).to(dev)
+                         hcfg["out_dim"], bool(hcfg.get("batchnorm", False))).to(dev)
     if channels_last:
         model = model.to(memory_format=torch.channels_last)
     loss_fn, miner = make_loss(loss_name, params, data.n_classes, hcfg["out_dim"],
@@ -367,6 +367,6 @@ def load_trained(run_dir: str | Path, tcfg: dict, device: str = "cpu") -> Embedd
     run_dir = Path(run_dir)
     hcfg = tcfg["head"]
     model = EmbeddingNet(load_backbone(tcfg["backbone"], pretrained=False), hcfg["in_dim"],
-                         hcfg["out_dim"])
+                         hcfg["out_dim"], bool(hcfg.get("batchnorm", False)))
     model.load_state_dict(torch.load(run_dir / "best.pt", map_location="cpu", weights_only=True))
     return model.to(device).eval()

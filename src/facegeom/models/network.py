@@ -81,15 +81,18 @@ def freeze_batchnorm(model: nn.Module) -> None:
 
 
 class EmbeddingNet(nn.Module):
-    """Réseau + tête linéaire + normalisation L2.
+    """Réseau + tête (linéaire, puis BatchNorm si ``batchnorm``) + normalisation L2.
 
-    ``train()`` laisse toujours les BatchNorm en mode évaluation.
+    ``train()`` laisse toujours les BatchNorm du réseau en mode évaluation ; la
+    BatchNorm de la tête, elle, s'entraîne (elle recentre les vecteurs, comme la
+    tête standard des réseaux de visages et l'essai du 17 novembre).
     """
 
-    def __init__(self, backbone: nn.Module, in_dim: int, out_dim: int):
+    def __init__(self, backbone: nn.Module, in_dim: int, out_dim: int, batchnorm: bool = False):
         super().__init__()
         self.backbone = backbone
-        self.head = nn.Linear(in_dim, out_dim)
+        linear = nn.Linear(in_dim, out_dim)
+        self.head = nn.Sequential(linear, nn.BatchNorm1d(out_dim)) if batchnorm else linear
         freeze_batchnorm(self.backbone)
 
     def train(self, mode: bool = True) -> EmbeddingNet:

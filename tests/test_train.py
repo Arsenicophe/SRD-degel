@@ -283,3 +283,18 @@ def test_cli_overrides_are_applied():
 
     cfg = apply_overrides({"a": 1, "b": {"c": 2}}, ["a=5", "b.c=null", "d=0.01"])
     assert cfg == {"a": 5, "b": {"c": None}, "d": 0.01}
+
+
+@pytest.mark.parametrize("loss", ["nsoftmax", "contrastive"])
+def test_head_batchnorm_option_trains_and_reloads(tmp_path, data, loss):
+    from facegeom.train import load_trained
+
+    cfg = small_cfg()
+    cfg["head"] = {**cfg["head"], "batchnorm": True}
+    r = train_run(tmp_path / "r", cfg, DCFG, loss, PARAMS[loss], 0, 1, data, "cpu",
+                  pretrained=False, log=lambda s: None)
+    assert r["status"] == "done"
+    model = load_trained(tmp_path / "r", cfg)
+    assert isinstance(model.head[1], torch.nn.BatchNorm1d) and not model.training
+    model.train()
+    assert model.head[1].training  # la BatchNorm de la tête s'entraîne, celles du réseau non
