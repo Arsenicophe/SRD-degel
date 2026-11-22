@@ -1,0 +1,16 @@
+# Mesures de base et évaluation (étapes 2, 6 et 7). Détail : docs/protocole.md, sections 5 et 10.
+
+dim: 128                            # ACP et LDA des mesures de base, comme la tête
+
+verification:                       # toutes les paires positives + échantillon fixe de négatives
+  n_negative: 1000000
+  seed: 0
+  fars: [0.1, 0.01, 0.001]
+
+uniformity: {n_pairs: 1000000, seed: 0, t: 2}   # paires au hasard, Wang & Isola (t = 2)
+
+bootstrap: {n: 1000, seed: 0}       # sur les identités
+
+tsne: {n_identities: 20, seed: 0, perplexity: 30, pca_dim: 50}
+neighbors: {n_queries: 10, n_neighbors: 5, seed: 0}
+figures: {hist_max_negatives: 200000}

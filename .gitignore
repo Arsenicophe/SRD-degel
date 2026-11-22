@@ -1,0 +1,32 @@
+# Données, vecteurs et résultats : sur Google Drive, jamais dans git
+/data/
+/features/
+/features_*/
+/runs/
+*.zip
+*.npy
+*.npz
+*.pt
+*.pth
+
+# Références lourdes (retéléchargeables)
+references/*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Système
+.DS_Store
+
+# Cache des images (reconstruit à chaque session)
+/cache/
+/results/*.npz
+/logs/

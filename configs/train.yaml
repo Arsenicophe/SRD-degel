@@ -1,0 +1,43 @@
+# Entraînement (étapes 3 à 5). Détail : docs/protocole.md, sections 4 à 9.
+
+backbone:
+  arch: resnet18
+  description: ResNet-18 supervisé ImageNet, torchvision IMAGENET1K_V1
+  url: https://download.pytorch.org/models/resnet18-f37072fd.pth
+  sha256: f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec
+head: {in_dim: 512, out_dim: 128}   # une couche linéaire puis normalisation L2
+
+batch: {classes_per_batch: 64, images_per_class: 4}   # 256 images, même composition pour les 4 pertes
+
+optimizer:                          # recette du ResNet-18 (He et al. 2016, torchvision)
+  momentum: 0.9
+  nesterov: false
+  weight_decay: 1.0e-4              # sur tous les paramètres entraînés
+  backbone_lr_ratio: 0.3333333333   # taux du réseau = taux de la tête / 3, rapport fixé
+schedule: {warmup_epochs: 1}        # montée linéaire pendant 1 époque, puis cosinus jusqu'à 0
+arcface_margin_warmup_epochs: 3     # marge d'ArcFace : montée de 0 à m en 3 époques
+
+augment:                            # Musgrave : RandomResizedCrop et symétrie
+  scale: [0.16, 1.0]                # fraction de la surface du carré
+  ratio: [0.75, 1.3333333333]       # largeur / hauteur, de 3/4 à 4/3
+  flip_p: 0.5
+
+early_stopping: {patience: 5}       # époques sans progrès du MAP@R de validation
+
+amp: auto                           # précision mixte sur GPU : bf16 si possible, sinon fp16 [à valider]
+channels_last: true                 # format mémoire plus rapide sur GPU
+eval_batch_size: 512
+num_workers: auto                   # processus de lecture des lots ; auto = min(8, cœurs − 1)
+
+pilot: {epochs: 1, seed: 100}       # réglages au centre des plages
+tune: {n_trials: 10, epochs: 20, seed: 100, keep_weights: false}
+final: {epochs: 30, seeds: [0, 1, 2]}
+
+# Plages de réglage ([min, max] linéaire, [min, max, log] logarithmique), fixées le 2026-11-22.
+# lr : taux de la tête (SGD) ; lr_weights : taux des poids propres de la perte.
+# pytorch-metric-learning 3.x : marge d'ArcFace en radians ; nsoftmax prend 1 / s.
+losses:
+  nsoftmax:    {params: {lr: [0.03, 0.3, log], lr_weights: [0.01, 0.3, log], s: [6, 40]}}
+  arcface:     {params: {lr: [0.03, 0.3, log], lr_weights: [0.01, 0.3, log], s: [24, 256, log], m: [0.25, 0.55]}}
+  contrastive: {params: {lr: [0.03, 0.3, log], pos_margin: [0.0, 0.4], neg_margin: [0.3, 1.0]}}
+  triplet:     {params: {lr: [0.03, 0.3, log], margin: [0.03, 0.2]}}

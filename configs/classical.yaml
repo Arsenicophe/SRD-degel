@@ -1,0 +1,14 @@
+# Méthodes classiques (protocole, section 11). Mêmes partitions, même recadrage, mêmes métriques.
+
+out_dir: features/classical         # pixels et vecteurs, à côté de ceux du réseau
+workers: 6                          # processus de lecture des images
+
+gray_size: 64                       # Eigenfaces et Fisherfaces : niveaux de gris 64 × 64
+dim: 128                            # même dimension que la tête
+fisher_pca_dim: 512                 # ACP avant la LDA (Belhumeur et al., 1997)
+
+lbp:                                # Ahonen et al., 2006 : LBP(8, 2) uniforme, grille 7 × 7
+  size: 128                         # calculé sur le recadrage entier, en niveaux de gris
+  points: 8
+  radius: 2
+  grid: 7

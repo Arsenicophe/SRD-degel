@@ -1,0 +1,27 @@
+# Données : CelebA, partition reprise, recadrage, cache. Détail : docs/protocole.md, section 3.
+
+# Sur Colab : résultats sur Drive, zip de CelebA déjà présent sur Drive (ancien dépôt).
+drive_root: /content/drive/MyDrive/srd-degel
+celeba_zip: /content/drive/MyDrive/srd-facegeom/data/celeba/img_align_celeba.zip
+
+splits:                             # copiés de srd-facegeom sans modification
+  names: {0: train, 1: val, 2: test}  # codes de list_eval_partition.txt
+  min_images_per_identity: 4          # exigé par les lots de 64 personnes × 4 images
+  output_dir: splits                  # fichiers versionnés
+
+crop:
+  # Positions moyennes des repères CelebA (image alignée 178 × 218), choix du 2026-11-09
+  center_x: 88.5
+  eye_y: 111.2
+  eye_rel: 0.46                     # yeux à 46 % de la hauteur, comme le gabarit ArcFace
+  size: 128
+  box: [24, 52, 152, 180]           # contrôle : doit être égal à la boîte calculée
+
+cache:
+  chunk_size: 1024                  # images par morceau (reprise après coupure)
+  workers: auto                     # processus de décodage ; auto = nombre de cœurs
+
+input_size: 224                     # côté de l'image donnée au réseau
+normalize:                          # ImageNet standard
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
