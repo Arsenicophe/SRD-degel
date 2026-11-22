@@ -88,11 +88,15 @@ class EmbeddingNet(nn.Module):
     tête standard des réseaux de visages et l'essai du 17 novembre).
     """
 
-    def __init__(self, backbone: nn.Module, in_dim: int, out_dim: int, batchnorm: bool = False):
+    def __init__(self, backbone: nn.Module, in_dim: int, out_dim: int, batchnorm: bool = False,
+                 dropout: float = 0.0):
         super().__init__()
         self.backbone = backbone
-        linear = nn.Linear(in_dim, out_dim)
-        self.head = nn.Sequential(linear, nn.BatchNorm1d(out_dim)) if batchnorm else linear
+        layers = [nn.Dropout(dropout)] if dropout else []
+        layers.append(nn.Linear(in_dim, out_dim))
+        if batchnorm:
+            layers.append(nn.BatchNorm1d(out_dim))
+        self.head = nn.Sequential(*layers) if len(layers) > 1 else layers[0]
         freeze_batchnorm(self.backbone)
 
     def train(self, mode: bool = True) -> EmbeddingNet:

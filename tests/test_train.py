@@ -290,11 +290,11 @@ def test_head_batchnorm_option_trains_and_reloads(tmp_path, data, loss):
     from facegeom.train import load_trained
 
     cfg = small_cfg()
-    cfg["head"] = {**cfg["head"], "batchnorm": True}
+    cfg["head"] = {**cfg["head"], "batchnorm": True, "dropout": 0.1}
     r = train_run(tmp_path / "r", cfg, DCFG, loss, PARAMS[loss], 0, 1, data, "cpu",
                   pretrained=False, log=lambda s: None)
     assert r["status"] == "done"
     model = load_trained(tmp_path / "r", cfg)
-    assert isinstance(model.head[1], torch.nn.BatchNorm1d) and not model.training
+    assert isinstance(model.head[-1], torch.nn.BatchNorm1d) and not model.training
     model.train()
-    assert model.head[1].training  # la BatchNorm de la tête s'entraîne, celles du réseau non
+    assert model.head[-1].training  # la BatchNorm de la tête s'entraîne, celles du réseau non
