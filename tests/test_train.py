@@ -35,6 +35,8 @@ def small_cfg() -> dict:
     cfg = copy.deepcopy(TCFG)
     cfg.update({"batch": {"classes_per_batch": 4, "images_per_class": 2}, "eval_batch_size": 16,
                 "num_workers": 0, "amp": False, "channels_last": False})
+    for loss in ("nsoftmax", "arcface"):  # même taille de lot (8) en 8 × 1 pour cette famille
+        cfg["losses"][loss]["batch"] = {"classes_per_batch": 8, "images_per_class": 1}
     return cfg
 
 
@@ -265,17 +267,20 @@ def test_tuning_with_only_diverged_trials_writes_no_best(tmp_path, data):
 
 
 def test_gradient_clipping_option_changes_training(tmp_path, data):
-    """L'écrêtage (désactivé par défaut) agit quand il est demandé, et entre dans la recette."""
-    assert TCFG["grad_clip_norm"] is None
-    ref = _run(tmp_path / "ref", data, epochs=1)
+    """L'écrêtage agit quand il est demandé, et entre dans la recette."""
+    cfg0 = small_cfg()
+    cfg0["grad_clip_norm"] = None
+    ref = train_run(tmp_path / "ref", cfg0, DCFG, "nsoftmax", PARAMS["nsoftmax"], 0, 1, data,
+                    "cpu", pretrained=False, log=lambda s: None)
     cfg = small_cfg()
     cfg["grad_clip_norm"] = 1e-3
     clipped = train_run(tmp_path / "clip", cfg, DCFG, "nsoftmax", PARAMS["nsoftmax"], 0, 1, data,
                         "cpu", pretrained=False, log=lambda s: None)
     assert read_json(tmp_path / "clip" / "params.json")["recipe"]["grad_clip_norm"] == 1e-3
-    assert clipped["best_map_at_r"] != ref["best_map_at_r"] or not torch.equal(
-        torch.load(tmp_path / "ref" / "best.pt", weights_only=True)["head.weight"],
-        torch.load(tmp_path / "clip" / "best.pt", weights_only=True)["head.weight"])
+    a = torch.load(tmp_path / "ref" / "best.pt", weights_only=True)
+    b = torch.load(tmp_path / "clip" / "best.pt", weights_only=True)
+    assert clipped["best_map_at_r"] != ref["best_map_at_r"] or not all(
+        torch.equal(a[k], b[k]) for k in a)
 
 
 def test_cli_overrides_are_applied():
@@ -298,3 +303,14 @@ def test_head_batchnorm_option_trains_and_reloads(tmp_path, data, loss):
     assert isinstance(model.head[-1], torch.nn.BatchNorm1d) and not model.training
     model.train()
     assert model.head[-1].training  # la BatchNorm de la tête s'entraîne, celles du réseau non
+
+
+def test_loss_config_gives_each_family_its_batches_and_head():
+    from facegeom.train import loss_config
+
+    for loss, (m, bn) in {"nsoftmax": (1, True), "arcface": (1, True),
+                          "contrastive": (4, False), "triplet": (4, False)}.items():
+        c = loss_config(TCFG, loss)
+        assert c["batch"]["images_per_class"] == m and c["head"]["batchnorm"] is bn
+        assert c["batch"]["classes_per_batch"] * m == 256  # même taille de lot partout
+        assert c["optimizer"] == TCFG["optimizer"] and c["augment"] == TCFG["augment"]

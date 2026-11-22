@@ -154,7 +154,9 @@ Carré de **128 px** centré sur le visage, boîte (24, 52, 152, 180) dans l'ima
   `torch.hub.load`.
 - La couche de classification est retirée : le réseau sort un vecteur de **512**
   après la moyenne globale.
-- **Tête** : une couche linéaire **512 → 128**, puis normalisation L2.
+- **Tête** : dropout 0,1, couche linéaire **512 → 128**, puis normalisation L2.
+  Pour `nsoftmax` et `arcface` seulement, une **BatchNorm** (entraînée) entre la
+  couche linéaire et la normalisation (section 7, décision du 22 novembre).
 - **BatchNorm gelés** : leurs statistiques et leurs paramètres restent ceux
   d'ImageNet pendant tout l'entraînement.
 - **Taille d'entrée : 224 px.** Le carré de 128 px est redimensionné en
@@ -211,9 +213,11 @@ peu d'information d'identité.
 | `contrastive` | paires | taux de la tête, marge positive, marge négative |
 | `triplet` | triplets, sélection semi-difficile | taux de la tête, marge |
 
-- **Lots identiques pour les 4 pertes : 64 personnes × 4 images = 256.** Les
-  pertes de classification marchent avec n'importe quelle composition ; les
-  pertes métriques ont besoin de plusieurs images par personne.
+- **Lots de 256 images pour les 4 pertes**, composés selon la famille (décision
+  du 22 novembre, section 7) : **256 personnes × 1 image** pour `nsoftmax` et
+  `arcface`, **64 personnes × 4 images** pour `contrastive` et `triplet`, qui ont
+  besoin de plusieurs images par personne. C'est la règle de Musgrave (32 × 1
+  et 8 × 4 chez lui).
 - `nsoftmax` est la softmax normalisée, c'est-à-dire ArcFace avec *m* = 0
   (vérifié par un test). *s* = 1 / température.
 - `arcface` : la marge **monte de 0 à *m*** pendant les **3 premières
@@ -229,16 +233,44 @@ peu d'information d'identité.
 
 ## 7. Recette d'entraînement
 
-Gardée **le plus possible proche de celle du ResNet-18** (He et al., 2016,
-reprise par torchvision : SGD, taux 0,1, momentum 0,9, weight decay 10⁻⁴, lots
-de 256).
+### Décision du 22 novembre, après les pilotes sur Colab
 
-- **Optimiseur** : SGD, momentum 0,9 (sans Nesterov), **weight decay 10⁻⁴** sur
+Le premier pilote, avec la recette du ResNet-18 (Linear seul, lots 64 × 4,
+augmentations de Musgrave, sans écrêtage), a fait **s'effondrer `nsoftmax` et
+`arcface`** (MAP@R 0,02 : tous les vecteurs au même point), alors que
+`contrastive` et `triplet` apprenaient. Onze variantes ont été mesurées
+(`runs/variantes/` sur Drive). La recette de l'essai dégelé du 17 novembre, en
+224 px, a fait apprendre les deux pertes de classification (MAP@R de validation
+après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
+
+- **Commune aux 4 pertes** : tête dropout 0,1 + linéaire ; augmentations
+  légères ; SGD Nesterov, weight decay 5×10⁻⁴ ; réseau à 0,3 fois le taux de la
+  tête ; écrêtage des gradients du réseau et de la tête à la norme 5.
+- **Selon la famille de perte**, chaque choix appuyé par une mesure (MAP@R après
+  1 époque, recette commune) :
+
+  | Perte | Lots | Tête avec BatchNorm | Tête sans BatchNorm | Retenu |
+  |---|---|---|---|---|
+  | `nsoftmax` | 256 × 1 | **23,5** | 0,03 (effondré) | avec |
+  | `arcface` | 256 × 1 | **24,0** | effondré | avec |
+  | `contrastive` | 64 × 4 | 0,84 | **16,87** | sans |
+  | `triplet` | 64 × 4 | 8,36 | 8,35 | sans (comme sa famille) |
+
+  Lecture : la BatchNorm de la tête recentre les vecteurs ; elle empêche le
+  glissement commun qui effondre les pertes à matrice de personnes, mais gêne
+  `contrastive`, qui rapproche les images d'une même personne. Chaque perte
+  apprend ainsi dans ses meilleures conditions mesurées ; la comparaison entre
+  familles inclut cette différence de tête (section 14).
+- **Poids propres de `nsoftmax` et `arcface`** : initialisés petits (loi normale
+  d'écart-type 0,01), comme l'essai du 17 novembre.
+
+### Détail
+
+- **Optimiseur** : SGD, momentum 0,9, **Nesterov**, **weight decay 5×10⁻⁴** sur
   tous les paramètres entraînés.
 - **Taux d'apprentissage** :
   - tête : réglé (section 8) ;
-  - réseau : **3 fois plus bas que la tête**, rapport fixé, non réglé (comme
-    l'essai du 17 novembre : 0,03 et 0,1) ;
+  - réseau : **0,3 fois le taux de la tête**, rapport fixé, non réglé ;
   - poids propres de `nsoftmax` et `arcface` : réglés à part, comme chez
     Musgrave.
 - **Évolution du taux** : montée linéaire pendant la **1re époque** (de presque
@@ -246,18 +278,17 @@ de 256).
   prévue de l'entraînement (20 époques au réglage, 30 au final). La recette
   d'origine (division par 10 aux époques 30 et 60 sur 90) ne peut pas être
   gardée telle quelle avec 20 ou 30 époques.
-- **Augmentations** (entraînement seulement), reprises de Musgrave, les mêmes
-  pour les 4 pertes :
-  - recadrage aléatoire couvrant de **16 % à 100 %** de la surface du carré, rapport
-    largeur / hauteur entre **3/4 et 4/3**, redimensionné en 224 × 224 ;
+- **Augmentations** (entraînement seulement), les mêmes pour les 4 pertes,
+  légères comme l'essai du 17 novembre :
+  - recadrage aléatoire carré couvrant de **85 % à 100 %** du côté du carré
+    (72 % à 100 % de la surface), redimensionné en 224 × 224 ;
   - **symétrie horizontale** avec une probabilité de 50 %.
+  Celles de Musgrave (16 % à 100 % de la surface) faisaient partie de la recette
+  qui effondrait `nsoftmax` et `arcface`.
 - **En évaluation**, sans hasard : le carré est redimensionné en 224 × 224,
   sans augmentation. Une même image donne toujours le même vecteur.
-- **Écrêtage des gradients** : aucun, comme la recette du ResNet-18. L'option
-  existe (`grad_clip_norm`, l'essai du 17 novembre utilisait 5) et ne s'active
-  que sur décision du groupe, par exemple si le pilote montre que nsoftmax ou
-  ArcFace s'effondrent dès la première époque (observé sur le Mac avec une
-  montée du taux comprimée sur 20 à 30 pas). **[à valider]**
+- **Écrêtage des gradients** : norme 5, sur le réseau et la tête (pas sur les
+  poids propres des pertes), comme l'essai du 17 novembre.
 - **Arrêt précoce** (repris) : MAP@R mesuré sur la validation à la fin de chaque
   époque ; on garde la meilleure époque ; arrêt après **5 époques sans
   progrès**.
@@ -306,21 +337,24 @@ de 256).
 
 ### Plages retenues
 
-Chaque plage contient les valeurs optimales de Musgrave (colonnes CUB200,
-Cars196, SOP et CUB200 en lots de 256) **et** celles qui ont marché dans l'essai
-dégelé du 17 novembre, avec de la marge. Marges d'ArcFace converties de degrés
-en radians.
+- `contrastive` et `triplet` : plages inchangées. Chacune contient les valeurs
+  optimales de Musgrave (colonnes CUB200, Cars196, SOP et CUB200 en lots de 256)
+  avec de la marge.
+- `nsoftmax` et `arcface` : plages **resserrées autour des valeurs qui ont marché**
+  au pilote du 22 novembre (taux 0,1, taux de la matrice 0,1, *s* = 32,
+  *m* = 0,5), décision du 22 novembre. **[à valider]** pour les bornes exactes.
 
 | Perte | Paramètre | Musgrave (4 valeurs) | Essai du 17 nov. | Plage retenue |
 |---|---|---|---|---|
-| `nsoftmax` | *s* = 1 / température | 9,2 ; 11,3 ; 15,9 ; 14,1 | 32 | **6 à 40** |
-| `arcface` | marge *m* | 0,41 ; 0,36 ; 0,33 ; 0,40 rad | 0,5 | **0,25 à 0,55 rad** |
-| `arcface` | *s* | 100 ; 50 ; 220 ; 79 | 32 | **24 à 256**, logarithmique |
+| `nsoftmax` | *s* = 1 / température | 9,2 ; 11,3 ; 15,9 ; 14,1 | 32 | **24 à 48** |
+| `arcface` | marge *m* | 0,41 ; 0,36 ; 0,33 ; 0,40 rad | 0,5 | **0,40 à 0,60 rad** |
+| `arcface` | *s* | 100 ; 50 ; 220 ; 79 | 32 | **24 à 48** |
 | `contrastive` | marge positive | ≤ 0 (équivaut à 0) ; 0,27 ; 0,29 ; 0,22 | non essayé | **0 à 0,40** |
 | `contrastive` | marge négative | 0,38 ; 0,54 ; 0,51 ; 0,77 | non essayé | **0,30 à 1,0** |
 | `triplet` | marge | 0,096 ; 0,119 ; 0,045 ; 0,137 | non essayé | **0,03 à 0,20** |
-| toutes | taux de la tête (SGD) | non réglé (10⁻⁶, RMSprop) | 0,1 | **0,03 à 0,3**, logarithmique |
-| `nsoftmax`, `arcface` | taux des poids propres (SGD) | 7×10⁻⁶ à 7×10⁻² avec RMSprop, non transposable | 0,1 | **0,01 à 0,3**, logarithmique |
+| `contrastive`, `triplet` | taux de la tête (SGD) | non réglé (10⁻⁶, RMSprop) | 0,1 | **0,03 à 0,3**, logarithmique |
+| `nsoftmax`, `arcface` | taux de la tête (SGD) | non réglé (10⁻⁶, RMSprop) | 0,1 | **0,05 à 0,2**, logarithmique |
+| `nsoftmax`, `arcface` | taux des poids propres (SGD) | 7×10⁻⁶ à 7×10⁻² avec RMSprop, non transposable | 0,1 | **0,05 à 0,2**, logarithmique |
 
 Les valeurs trouvées avec l'ancien ResNet-50 gelé ne servent pas de repère :
 dispositif différent (réseau gelé, RMSprop, lots de 32), et chacune n'était que
@@ -521,6 +555,12 @@ conditions proches de son article d'origine.
 - Détection et alignement hors périmètre.
 
 **Sur l'équité de la comparaison**
+- Deux familles, deux compositions de lots et deux têtes (avec ou sans
+  BatchNorm), choisies par mesure (section 7) : une comparaison entre familles
+  (par exemple `arcface` contre `triplet`) mélange l'effet de la perte et celui
+  de la tête. Les comparaisons à l'intérieur d'une famille n'ont pas ce biais.
+- Les plages de `nsoftmax` et `arcface` sont resserrées autour d'un point qui a
+  marché ; celles des pertes à paires sont plus larges.
 - Nombre de paramètres réglés différent : 4 pour `arcface`, 3 pour `nsoftmax`
   et `contrastive`, 2 pour `triplet`. Avec le même nombre de tirages, les pertes
   à plus de paramètres explorent moins bien leur espace.
@@ -559,3 +599,4 @@ conditions proches de son article d'origine.
 | 2026-11-22 | Étape 1 sur le Mac : cache des carrés (train 161 602 images en 94 s, val 19 720 en 7 s). Étape 2 sur le Mac : mesures de base sur la validation (section 5, résultat). Le test n'est pas lu |
 | 2026-11-22 | Après l'essai réel sur le Mac et la relecture du code : tirage divergé consigné sans arrêter le réglage ; pilote = première époque d'un tirage ; essais rapides à part ; garde du test renforcée ; précision float16 sur T4 ; journal par run ; points [à valider] ajoutés (sections 7, 8, 11, 13) |
 | 2026-11-22 | Section 11 : réglages des méthodes classiques décidés (délégation d'Arsène) : Eigenfaces ACP 128, Fisherfaces ACP 512 puis LDA 128, en gris 64 × 64 ; LBP(8, 2) uniforme, grille 7 × 7, sur le carré de 128 px ; limite ajoutée en section 14 |
+| 2026-11-22 | Pilotes sur Colab (T4, puis L4) : effondrement de nsoftmax et arcface avec la recette du ResNet-18 ; 11 variantes mesurées (`runs/variantes/`). Recette retenue (section 7) : recette commune de l'essai du 17 novembre (dropout + linéaire, augmentations légères, SGD Nesterov, weight decay 5e-4, réseau × 0,3, écrêtage 5) ; lots 256 × 1 et tête avec BatchNorm pour nsoftmax et arcface, lots 64 × 4 et tête sans BatchNorm pour contrastive et triplet ; plages resserrées pour nsoftmax et arcface (section 8). Décision d'Arsène |

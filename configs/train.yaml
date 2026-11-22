@@ -5,28 +5,27 @@ backbone:
   description: ResNet-18 supervisé ImageNet, torchvision IMAGENET1K_V1
   url: https://download.pytorch.org/models/resnet18-f37072fd.pth
   sha256: f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec
-head: {in_dim: 512, out_dim: 128, batchnorm: false}   # linéaire (+ BatchNorm si true), puis L2 [à valider]
+# Tête commune : dropout 0,1, linéaire 512 → 128, puis L2 ; BatchNorm selon la famille (losses)
+head: {in_dim: 512, out_dim: 128, dropout: 0.1, batchnorm: false}
 
-batch: {classes_per_batch: 64, images_per_class: 4}   # 256 images, même composition pour les 4 pertes
+batch: {classes_per_batch: 64, images_per_class: 4}   # 256 images ; composition selon la famille (losses)
 
-optimizer:                          # recette du ResNet-18 (He et al. 2016, torchvision)
+optimizer:                          # recette commune, reprise de l'essai du 17 novembre (pilote du 22)
   momentum: 0.9
-  nesterov: false
-  weight_decay: 1.0e-4              # sur tous les paramètres entraînés
-  backbone_lr_ratio: 0.3333333333   # taux du réseau = taux de la tête / 3, rapport fixé
+  nesterov: true
+  weight_decay: 5.0e-4              # sur tous les paramètres entraînés
+  backbone_lr_ratio: 0.3            # taux du réseau = 0,3 × taux de la tête, rapport fixé
 schedule: {warmup_epochs: 1}        # montée linéaire pendant 1 époque, puis cosinus jusqu'à 0
 arcface_margin_warmup_epochs: 3     # marge d'ArcFace : montée de 0 à m en 3 époques
 
-augment:                            # Musgrave : RandomResizedCrop et symétrie
-  scale: [0.16, 1.0]                # fraction de la surface du carré
-  ratio: [0.75, 1.3333333333]       # largeur / hauteur, de 3/4 à 4/3
+augment:                            # légères, comme l'essai du 17 novembre : zoom de 85 à 100 %, symétrie
+  scale: [0.7225, 1.0]              # fraction de la surface du carré (côté de 85 à 100 %)
+  ratio: [1.0, 1.0]                 # recadrage carré
   flip_p: 0.5
 
 early_stopping: {patience: 5}       # époques sans progrès du MAP@R de validation
-grad_clip_norm: null                # écrêtage des gradients (norme max) ; null = aucun, comme la
-                                    # recette ResNet-18. L'essai du 17 novembre utilisait 5. [à valider]
-loss_weight_init_std: null          # init. des poids propres de nsoftmax/arcface ; null = N(0, 1) de la
-                                    # bibliothèque. L'essai du 17 novembre utilisait 0,01. [à valider]
+grad_clip_norm: 5                   # écrêtage des gradients du réseau et de la tête (norme max)
+loss_weight_init_std: 0.01          # init. des poids propres de nsoftmax/arcface (essai du 17 novembre)
 
 amp: auto                           # précision mixte sur GPU : bf16 si possible, sinon fp16 [à valider]
 channels_last: true                 # format mémoire plus rapide sur GPU
@@ -43,7 +42,16 @@ final: {epochs: 30, seeds: [0, 1, 2]}
 # lr : taux de la tête (SGD) ; lr_weights : taux des poids propres de la perte.
 # pytorch-metric-learning 3.x : marge d'ArcFace en radians ; nsoftmax prend 1 / s.
 losses:
-  nsoftmax:    {params: {lr: [0.03, 0.3, log], lr_weights: [0.01, 0.3, log], s: [6, 40]}}
-  arcface:     {params: {lr: [0.03, 0.3, log], lr_weights: [0.01, 0.3, log], s: [24, 256, log], m: [0.25, 0.55]}}
+  # Famille « matrice des personnes » : lots 256 × 1, tête avec BatchNorm ; plages resserrées autour
+  # des valeurs qui ont marché au pilote du 22 novembre (taux 0,1, taux de la matrice 0,1, s 32, m 0,5).
+  nsoftmax:
+    batch: {classes_per_batch: 256, images_per_class: 1}
+    head: {batchnorm: true}
+    params: {lr: [0.05, 0.2, log], lr_weights: [0.05, 0.2, log], s: [24, 48]}
+  arcface:
+    batch: {classes_per_batch: 256, images_per_class: 1}
+    head: {batchnorm: true}
+    params: {lr: [0.05, 0.2, log], lr_weights: [0.05, 0.2, log], s: [24, 48], m: [0.4, 0.6]}
+  # Famille « paires » : lots 64 × 4, tête sans BatchNorm ; plages inchangées.
   contrastive: {params: {lr: [0.03, 0.3, log], pos_margin: [0.0, 0.4], neg_margin: [0.3, 1.0]}}
   triplet:     {params: {lr: [0.03, 0.3, log], margin: [0.03, 0.2]}}

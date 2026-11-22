@@ -50,12 +50,8 @@ tableau final donne, pour chaque perte :
 - en bas, le **temps prévu** du réglage et des graines finales, au plus.
 
 C'est ce tableau qui permet de décider du nombre d'époques et de la règle de
-repli (protocole, section 1). **À regarder en particulier** : si `nsoftmax` ou
-`arcface` ont un `map_at_r` proche de 0 (au niveau du hasard), le réseau s'est
-effondré ; c'est arrivé sur le Mac avec une montée du taux comprimée. Le groupe
-peut alors décider d'activer l'écrêtage des gradients (`grad_clip_norm: 5` dans
-`configs/train.yaml`, comme l'essai du 17 novembre) et relancer le pilote avec
-`--new`. Une décision prise s'écrit dans
+repli (protocole, section 1). **Fait le 22 novembre** : la recette finale (section 7 du protocole) a été choisie
+après les pilotes ; il n'est pas nécessaire de refaire le pilote avant le réglage. Une décision prise s'écrit dans
 `docs/protocole.md`, avec une ligne au journal.
 
 ## 4. Réglage et graines finales

@@ -18,6 +18,7 @@ Fichiers d'un run (``run_dir``) :
 
 from __future__ import annotations
 
+import copy
 import math
 import time
 import traceback
@@ -30,7 +31,13 @@ import pandas as pd
 import torch
 
 from facegeom.data.augment import GpuAugment
-from facegeom.data.batches import CachedBatches, augment_generator, batch_loader, epoch_batches
+from facegeom.data.batches import (
+    CachedBatches,
+    augment_generator,
+    batch_loader,
+    derived_seed,
+    epoch_batches,
+)
 from facegeom.eval.retrieval import retrieval_per_query, summarize
 from facegeom.losses import WEIGHTED, compute_loss, make_loss, margin_at, set_arcface_margin
 from facegeom.models.network import EmbeddingNet, autocast_dtype, embed_images, load_backbone
@@ -87,6 +94,20 @@ def build_optimizer(model: EmbeddingNet, loss_fn, loss_name: str, params: dict,
     return torch.optim.SGD(groups, lr=lr, momentum=float(ocfg["momentum"]),
                            nesterov=bool(ocfg["nesterov"]),
                            weight_decay=float(ocfg["weight_decay"]))
+
+
+FAMILY_KEYS = ("batch", "head")  # sections qu'une perte peut adapter (losses.<perte>.batch / .head)
+
+
+def loss_config(tcfg: dict, loss_name: str) -> dict:
+    """Configuration d'entraînement d'une perte : la recette commune, plus la composition
+    des lots et la tête propres à sa famille (``losses.<perte>.batch`` et ``.head``)."""
+    cfg = copy.deepcopy(tcfg)
+    own = tcfg["losses"][loss_name]
+    for key in FAMILY_KEYS:
+        if key in own:
+            cfg[key] = {**cfg[key], **own[key]}
+    return cfg
 
 
 RECIPE_KEYS = ("backbone", "head", "batch", "optimizer", "schedule",
@@ -164,6 +185,7 @@ def train_run(
     """
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    tcfg = loss_config(tcfg, loss_name)
     schedule_epochs = int(schedule_epochs or epochs)
     expected = run_identity(tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs,
                             max_steps_per_epoch)
@@ -204,6 +226,9 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
     steps_per_epoch = len(data.train_labels) // batch_size
     if max_steps_per_epoch:
         steps_per_epoch = min(steps_per_epoch, int(max_steps_per_epoch))
+    if steps_per_epoch < 1:
+        raise ValueError(f"Lot de {batch_size} images plus grand que l'entraînement "
+                         f"({len(data.train_labels)} images).")
     total_steps = steps_per_epoch * schedule_epochs
     warmup_steps = round(float(tcfg["schedule"]["warmup_epochs"]) * steps_per_epoch)
     margin_warmup = float(tcfg["arcface_margin_warmup_epochs"])
@@ -259,6 +284,7 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
         loader = batch_loader(CachedBatches(data.train_cache, batches, data.train_labels),
                               num_workers, pin_memory=dev.type == "cuda")
         gen = augment_generator(seed, epoch)
+        torch.manual_seed(derived_seed(seed, epoch, 2))  # dropout : même tirage avec ou sans reprise
         loss_sum = torch.zeros((), device=dev)
         for i, (images, labels) in enumerate(loader):
             step = (epoch - 1) * steps_per_epoch + i
@@ -365,7 +391,7 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
 def load_trained(run_dir: str | Path, tcfg: dict, device: str = "cpu") -> EmbeddingNet:
     """Réseau d'un run terminé, à sa meilleure époque, en mode évaluation."""
     run_dir = Path(run_dir)
-    hcfg = tcfg["head"]
+    hcfg = read_json(run_dir / "params.json")["recipe"]["head"]  # la tête avec laquelle le run a tourné
     model = EmbeddingNet(load_backbone(tcfg["backbone"], pretrained=False), hcfg["in_dim"],
                          hcfg["out_dim"], bool(hcfg.get("batchnorm", False)),
                          float(hcfg.get("dropout", 0.0)))

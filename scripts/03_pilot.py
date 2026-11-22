@@ -29,7 +29,7 @@ from facegeom.stages import (
     stage_lock,
     write_stage_meta,
 )
-from facegeom.train import train_run
+from facegeom.train import loss_config, train_run
 from facegeom.utils import read_json, write_json
 
 
@@ -82,7 +82,7 @@ def main() -> None:
     brut = next(r["map_at_r"] for r in baselines["rows"] if r["method"] == "brut_acp")
 
     data = load_train_data(dcfg, args.cache_dir)
-    bcfg = tcfg["batch"]
+    bcfg = loss_config(tcfg, args.losses[0])["batch"]  # même taille de lot pour toutes les pertes
     full_steps = len(data.train_labels) // (bcfg["classes_per_batch"] * bcfg["images_per_class"])
     pcfg = tcfg["pilot"]
     try:
