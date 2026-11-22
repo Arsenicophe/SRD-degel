@@ -85,13 +85,14 @@ def select_stage(runs_dir: str | Path, kind: str, loss: str | None, new: bool, e
                  log: Callable[[str], None] = print) -> Path | None:
     """Dossier où travailler, ou ``None`` si l'étape est déjà terminée.
 
-    - le dossier le plus récent de l'étape n'est pas terminé : on le reprend
-      (après une coupure, même s'il avait été créé avec ``--new``) ;
-    - il est terminé : rien à faire, sauf avec ``new=True`` (nouveau dossier) ;
+    - ``new=True`` : toujours un nouveau dossier ;
+    - sinon, le dossier le plus récent de l'étape n'est pas terminé : on le
+      reprend (après une coupure, même s'il avait été créé avec ``--new``) ;
+    - il est terminé : rien à faire ;
     - aucun dossier : nouveau dossier.
     """
     stages = find_stages(runs_dir, kind, loss, essai)
-    if stages and not is_done(stages[-1]):
+    if stages and not new and not is_done(stages[-1]):
         log(f"Reprise du dossier {stages[-1]}")
         return stages[-1]
     if stages and not new:
