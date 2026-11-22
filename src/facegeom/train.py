@@ -90,7 +90,7 @@ def build_optimizer(model: EmbeddingNet, loss_fn, loss_name: str, params: dict,
 
 
 RECIPE_KEYS = ("backbone", "head", "batch", "optimizer", "schedule",
-               "arcface_margin_warmup_epochs", "augment", "early_stopping")
+               "arcface_margin_warmup_epochs", "augment", "early_stopping", "grad_clip_norm")
 
 
 def run_identity(tcfg: dict, dcfg: dict, loss_name: str, params: dict, seed: int, epochs: int,
@@ -104,7 +104,7 @@ def run_identity(tcfg: dict, dcfg: dict, loss_name: str, params: dict, seed: int
     identity = {
         "loss": loss_name, "params": {k: float(v) for k, v in params.items()},
         "seed": int(seed), "epochs": int(epochs), "schedule_epochs": int(schedule_epochs),
-        "recipe": {**{k: tcfg[k] for k in RECIPE_KEYS},
+        "recipe": {**{k: tcfg.get(k) for k in RECIPE_KEYS},  # clé absente = None (anciens fichiers)
                    "input_size": dcfg["input_size"], "normalize": dcfg["normalize"]},
     }
     if max_steps_per_epoch:
@@ -207,6 +207,7 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
     warmup_steps = round(float(tcfg["schedule"]["warmup_epochs"]) * steps_per_epoch)
     margin_warmup = float(tcfg["arcface_margin_warmup_epochs"])
     checkpoint_every = int(tcfg.get("checkpoint_every", 1))
+    clip_norm = float(tcfg["grad_clip_norm"]) if tcfg.get("grad_clip_norm") else None
 
     set_seed(seed)
     model = EmbeddingNet(load_backbone(tcfg["backbone"], pretrained), hcfg["in_dim"],
@@ -271,6 +272,10 @@ def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs
             loss = compute_loss(loss_fn, miner, emb.float(), labels)
             optimizer.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
+            if clip_norm:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    [q for g in optimizer.param_groups for q in g["params"]], clip_norm)
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()

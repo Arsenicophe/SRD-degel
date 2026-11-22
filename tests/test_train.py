@@ -262,3 +262,17 @@ def test_tuning_with_only_diverged_trials_writes_no_best(tmp_path, data):
                     log=lambda s: None)
     assert best is None and not (tmp_path / "best.json").exists()
     assert read_json(tmp_path / "DONE.json")["valid_trials"] == 0
+
+
+def test_gradient_clipping_option_changes_training(tmp_path, data):
+    """L'écrêtage (désactivé par défaut) agit quand il est demandé, et entre dans la recette."""
+    assert TCFG["grad_clip_norm"] is None
+    ref = _run(tmp_path / "ref", data, epochs=1)
+    cfg = small_cfg()
+    cfg["grad_clip_norm"] = 1e-3
+    clipped = train_run(tmp_path / "clip", cfg, DCFG, "nsoftmax", PARAMS["nsoftmax"], 0, 1, data,
+                        "cpu", pretrained=False, log=lambda s: None)
+    assert read_json(tmp_path / "clip" / "params.json")["recipe"]["grad_clip_norm"] == 1e-3
+    assert clipped["best_map_at_r"] != ref["best_map_at_r"] or not torch.equal(
+        torch.load(tmp_path / "ref" / "best.pt", weights_only=True)["head.weight"],
+        torch.load(tmp_path / "clip" / "best.pt", weights_only=True)["head.weight"])

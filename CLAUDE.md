@@ -107,10 +107,11 @@ un run sans coupure.
 ## État du projet
 
 - [x] Protocole « réseau entraîné en entier » rédigé (`docs/protocole.md`)
-- [x] Code écrit et testé sur le Mac (petit sous-ensemble)
-- [ ] Étape 1 : cache des images sur Colab
-- [ ] Étape 2 : mesures de base (brut, LDA) sur la validation
-- [ ] Étape 3 : pilote, mesure du budget
+- [x] Code écrit, 97 tests, essai réel de toute la chaîne sur le Mac (époques raccourcies)
+- [x] Étape 1 : cache des images (fait sur le Mac ; à refaire à chaque session Colab)
+- [x] Étape 2 : mesures de base sur la validation, faites sur le Mac le 22 novembre
+      (brut 3,02, ACP 128 3,01, LDA 5,13 ; `results/2_baselines_val.json`)
+- [ ] Étape 3 : pilote sur Colab, mesure du budget
 - [ ] Étapes 4 et 5 : réglage, entraînements finaux
 - [ ] Étapes 6 et 7 : évaluation sur la validation, puis test une seule fois
 

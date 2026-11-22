@@ -23,6 +23,8 @@ augment:                            # Musgrave : RandomResizedCrop et symétrie
   flip_p: 0.5
 
 early_stopping: {patience: 5}       # époques sans progrès du MAP@R de validation
+grad_clip_norm: null                # écrêtage des gradients (norme max) ; null = aucun, comme la
+                                    # recette ResNet-18. L'essai du 17 novembre utilisait 5. [à valider]
 
 amp: auto                           # précision mixte sur GPU : bf16 si possible, sinon fp16 [à valider]
 channels_last: true                 # format mémoire plus rapide sur GPU

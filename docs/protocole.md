@@ -253,6 +253,11 @@ de 256).
   - **symétrie horizontale** avec une probabilité de 50 %.
 - **En évaluation**, sans hasard : le carré est redimensionné en 224 × 224,
   sans augmentation. Une même image donne toujours le même vecteur.
+- **Écrêtage des gradients** : aucun, comme la recette du ResNet-18. L'option
+  existe (`grad_clip_norm`, l'essai du 17 novembre utilisait 5) et ne s'active
+  que sur décision du groupe, par exemple si le pilote montre que nsoftmax ou
+  ArcFace s'effondrent dès la première époque (observé sur le Mac avec une
+  montée du taux comprimée sur 20 à 30 pas). **[à valider]**
 - **Arrêt précoce** (repris) : MAP@R mesuré sur la validation à la fin de chaque
   époque ; on garde la meilleure époque ; arrêt après **5 époques sans
   progrès**.
