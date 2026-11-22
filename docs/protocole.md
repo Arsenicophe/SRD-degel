@@ -433,19 +433,31 @@ le fichier.
 
 ## 11. Méthodes classiques
 
-Mêmes partitions, même recadrage, mêmes métriques. Code repris de la copie de
-travail du 16 novembre. **[à valider]** pour les réglages ci-dessous, choisis
-dans cette copie sans discussion de groupe.
+Mêmes partitions, même recadrage, mêmes métriques. Réglages décidés le
+22 novembre (Arsène a délégué le choix) : chaque méthode est placée dans des
+conditions proches de son article d'origine.
 
-| Méthode | Référence | Principe | Comparaison |
+| Méthode | Référence | Réglage retenu | Comparaison |
 |---|---|---|---|
 | Eigenfaces | Turk & Pentland, 1991 | ACP à 128 dimensions sur les pixels | cosinus |
 | Fisherfaces | Belhumeur et al., 1997 | ACP à 512 dimensions, puis LDA à 128 | cosinus |
-| LBP | Ahonen et al., 2006 | histogrammes de motifs binaires locaux (8 voisins, rayon 2, uniformes) sur une grille 7 × 7 | distance du khi-deux |
+| LBP | Ahonen et al., 2006 | LBP à 8 voisins, rayon 2, motifs uniformes, grille 7 × 7 | distance du khi-deux |
 
-- Eigenfaces et Fisherfaces : images en niveaux de gris, 64 × 64, tirées du
-  même carré de 128 px. LBP : sur le carré de 128 px entier, en niveaux de gris
-  (choix de la copie de travail). **[à valider]**
+- **Images** : niveaux de gris, tirées du même carré de 128 px que le réseau.
+  - Eigenfaces et Fisherfaces en **64 × 64** (4 096 pixels) : la proposition du
+    protocole précédent, et une ACP sur 161 602 images qui reste calculable.
+  - LBP sur le carré entier en **128 × 128** : LBP compte des motifs de texture
+    fins ; en 64 × 64, chaque case de la grille 7 × 7 n'aurait qu'environ 9 × 9
+    pixels pour un histogramme de 59 motifs. Ahonen et al. travaillaient sur des
+    images d'environ 130 × 150.
+- **128 dimensions** pour Eigenfaces et Fisherfaces : la taille des vecteurs du
+  réseau et des mesures de base.
+- **Fisherfaces, ACP à 512** avant la LDA : la règle de l'article (ACP vers
+  *n* − *C* dimensions) ne réduit rien ici, car *n* − *C* = 161 602 − 7 689
+  dépasse les 4 096 pixels ; 512 garde 98,5 % de la variance (mesuré le
+  16 novembre). Valeur fixée sans essai (section 14).
+- **LBP** : les réglages d'Ahonen et al. ; le score d'une paire vaut
+  1 − χ² / masse, entre −1 et 1, pour se lire dans le même sens qu'un cosinus.
 - LBP se compare par khi-deux et non par cosinus : entorse à « même mesure
   partout », à écrire.
 
@@ -533,6 +545,8 @@ dans cette copie sans discussion de groupe.
 - Alignement et uniformité sont fondés théoriquement pour les pertes
   contrastives de type InfoNCE ; pour les pertes à marge, c'est descriptif.
 - LBP comparé par khi-deux, pas par cosinus.
+- Fisherfaces : la dimension de l'ACP (512) est fixée sans essai ; les méthodes
+  classiques ne sont pas réglées, contrairement aux pertes.
 - t-SNE est une illustration, pas une mesure.
 
 ---
@@ -544,3 +558,4 @@ dans cette copie sans discussion de groupe.
 | 2026-11-22 | Création du protocole « réseau entraîné en entier », avec l'accord de l'encadrant. Décisions reprises des notes de travail d'Arsène, versions 1 à 7 (`docs/notes/`). Bonnes pratiques de l'ancien protocole reprises (section 12) |
 | 2026-11-22 | Étape 1 sur le Mac : cache des carrés (train 161 602 images en 94 s, val 19 720 en 7 s). Étape 2 sur le Mac : mesures de base sur la validation (section 5, résultat). Le test n'est pas lu |
 | 2026-11-22 | Après l'essai réel sur le Mac et la relecture du code : tirage divergé consigné sans arrêter le réglage ; pilote = première époque d'un tirage ; essais rapides à part ; garde du test renforcée ; précision float16 sur T4 ; journal par run ; points [à valider] ajoutés (sections 7, 8, 11, 13) |
+| 2026-11-22 | Section 11 : réglages des méthodes classiques décidés (délégation d'Arsène) : Eigenfaces ACP 128, Fisherfaces ACP 512 puis LDA 128, en gris 64 × 64 ; LBP(8, 2) uniforme, grille 7 × 7, sur le carré de 128 px ; limite ajoutée en section 14 |
