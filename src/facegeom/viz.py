@@ -27,7 +27,7 @@ GOOD, BAD = "#0ca30c", "#d03b3b"  # couleurs d'état, toujours avec ✓ / ✗
 LOSS_STYLE = {"nsoftmax": ("#2a78d6", "o"), "arcface": ("#eb6834", "s"),
               "contrastive": ("#1baf7a", "^"), "triplet": ("#eda100", "D")}
 # Repères sans entraînement de tête : réseau gelé en gris foncé, méthodes classiques (pixels) en gris clair
-REF_STYLE = {"brut": ("#52514e", "x"), "brut_acp": ("#52514e", "X"), "lda": ("#52514e", "P"),
+REF_STYLE = {"brut": ("#52514e", "d"), "brut_acp": ("#52514e", "X"), "lda": ("#52514e", "P"),
              "eigenfaces": ("#a3a29d", "v"), "fisherfaces": ("#a3a29d", "<"), "lbp": ("#a3a29d", "*")}
 NAMES_FR = {"brut": "brut (512)", "brut_acp": "brut (ACP 128)", "lda": "LDA 128", "eigenfaces": "Eigenfaces",
             "fisherfaces": "Fisherfaces", "lbp": "LBP (khi-deux)"}
@@ -55,7 +55,7 @@ def _save(fig, out_path: str | Path, dpi: int, facecolor: str | None = None) -> 
 
 
 
-def neighbors_sheet(rows: list[dict], out_path: str | Path, title: str) -> Path:
+def neighbors_sheet(rows: list[dict], out_path: str | Path, title: str, en: bool = False) -> Path:
     """Une ligne par requête : la requête puis ses k plus proches voisins.
 
     Chaque ligne : ``query`` (image), ``neighbors`` (liste d'images),
@@ -67,7 +67,7 @@ def neighbors_sheet(rows: list[dict], out_path: str | Path, title: str) -> Path:
     for i, row in enumerate(rows):
         ax = axes[i, 0]
         ax.imshow(row["query"])
-        ax.set_xlabel("requête", fontsize=7, color=INK)
+        ax.set_xlabel("query" if en else "requête", fontsize=7, color=INK)
         for side in ax.spines.values():
             side.set_edgecolor(INK)
             side.set_linewidth(2.5)

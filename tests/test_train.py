@@ -5,6 +5,7 @@ et de petites images synthétiques : quelques secondes chacun.
 """
 
 import copy
+import itertools
 from pathlib import Path
 
 import numpy as np
@@ -124,8 +125,8 @@ def test_lr_factor_warmup_then_cosine():
     f = [lr_factor(t, warm, total) for t in range(total)]
     assert f[0] == pytest.approx(0.1)
     assert max(f) == pytest.approx(lr_factor(9, warm, total))
-    assert all(a <= b + 1e-12 for a, b in zip(f[:9], f[1:10]))      # montée
-    assert all(a >= b - 1e-12 for a, b in zip(f[10:-1], f[11:]))    # descente
+    assert all(a <= b + 1e-12 for a, b in itertools.pairwise(f[:10]))   # montée
+    assert all(a >= b - 1e-12 for a, b in itertools.pairwise(f[10:]))   # descente
     assert f[-1] < 0.01
 
 
@@ -217,3 +218,47 @@ def test_tuning_stage_writes_best_and_detects_changed_ranges(tmp_path, data):
     with pytest.raises(ConfigMismatchError):
         run_tune(tmp_path, cfg, DCFG, "triplet", data, "cpu", pretrained=False,
                  log=lambda s: None)
+
+
+def test_diverging_run_is_recorded_and_tuning_goes_on(tmp_path, data, monkeypatch):
+    """Un run dont le réseau dégénère est consigné « diverged » ; le réglage continue."""
+    import facegeom.train as train_module
+
+    calls = {"n": 0}
+    real_embed = train_module.embed_images
+
+    def degenerate_first_run(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:  # premier tirage : vecteurs nuls
+            raise FloatingPointError("vecteurs nuls en sortie du réseau (réseau dégénéré)")
+        return real_embed(*args, **kwargs)
+
+    monkeypatch.setattr(train_module, "embed_images", degenerate_first_run)
+    cfg = small_cfg()
+    cfg["tune"] = {"n_trials": 2, "epochs": 1, "seed": 100, "keep_weights": False}
+    cfg["losses"]["arcface"]["params"] = {"lr": [0.01, 0.02], "lr_weights": [0.01, 0.02],
+                                          "s": [10, 12], "m": [0.1, 0.2]}
+    best = run_tune(tmp_path, cfg, DCFG, "arcface", data, "cpu", pretrained=False,
+                    log=lambda s: None)
+    first = read_json(tmp_path / "trial00" / "result.json")
+    assert first["status"] == "diverged" and first["best_map_at_r"] is None
+    assert best is not None and best["tag"] == "trial01"
+
+
+def test_non_finite_loss_marks_run_diverged(tmp_path, data):
+    params = {**PARAMS["nsoftmax"], "lr": 1e12, "lr_weights": 1e12}
+    res = train_run(tmp_path / "r", small_cfg(), DCFG, "nsoftmax", params, 0, 2, data, "cpu",
+                    pretrained=False, log=lambda s: None)
+    assert res["status"] == "diverged"
+    assert (tmp_path / "r" / "result.json").exists() and not (tmp_path / "r" / "last.pt").exists()
+
+
+def test_tuning_with_only_diverged_trials_writes_no_best(tmp_path, data):
+    cfg = small_cfg()
+    cfg["tune"] = {"n_trials": 2, "epochs": 1, "seed": 100, "keep_weights": False}
+    cfg["losses"]["nsoftmax"]["params"] = {"lr": [1e12, 2e12], "lr_weights": [1e12, 2e12],
+                                           "s": [10, 12]}
+    best = run_tune(tmp_path, cfg, DCFG, "nsoftmax", data, "cpu", pretrained=False,
+                    log=lambda s: None)
+    assert best is None and not (tmp_path / "best.json").exists()
+    assert read_json(tmp_path / "DONE.json")["valid_trials"] == 0

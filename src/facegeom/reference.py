@@ -18,7 +18,7 @@ import numpy as np
 from facegeom.data.augment import GpuAugment
 from facegeom.eval.baselines import apply_projection, fit_lda, fit_pca
 from facegeom.eval.retrieval import l2_normalize
-from facegeom.models.network import autocast_dtype, embed_images, load_backbone
+from facegeom.models.network import embed_images, load_backbone
 
 REFERENCES = ("brut", "brut_acp", "lda")
 
@@ -32,11 +32,14 @@ def eval_augment(dcfg: dict, tcfg: dict, device: str) -> GpuAugment:
 
 def base_features(tcfg: dict, dcfg: dict, images: np.ndarray, device: str,
                   log: Callable[[str], None] | None = print) -> np.ndarray:
-    """Vecteurs de 512 du réseau de départ (poids ImageNet), transformation d'évaluation."""
+    """Vecteurs de 512 du réseau de départ (poids ImageNet), transformation d'évaluation.
+
+    Toujours en float32, quelle que soit la machine : les repères sont les mêmes
+    sur le Mac (étape 2) et sur Colab (évaluation finale).
+    """
     model = load_backbone(tcfg["backbone"], pretrained=True).to(device).eval()
     return embed_images(model, images, eval_augment(dcfg, tcfg, device),
-                        int(tcfg["eval_batch_size"]), autocast_dtype(device, tcfg.get("amp")),
-                        log=log)
+                        int(tcfg["eval_batch_size"]), None, log=log)
 
 
 def cached_base_features(path: Path, tcfg: dict, dcfg: dict, images: np.ndarray,

@@ -20,7 +20,16 @@ def parser(doc: str) -> argparse.ArgumentParser:
     p.add_argument("--cache-dir", default="cache", help="cache des carrés (Colab : /content/cache)")
     p.add_argument("--runs-dir", default="runs", help="résultats (Colab : dossier runs sur Drive)")
     p.add_argument("--device", default=default_device())
+    p.add_argument("--allow-cpu", action="store_true",
+                   help="autoriser un entraînement sans carte graphique (très lent)")
     return p
+
+
+def check_device(args) -> None:
+    """Refuse d'entraîner sur processeur par mégarde (session Colab sans GPU)."""
+    if args.device == "cpu" and not args.allow_cpu:
+        raise SystemExit("Aucune carte graphique : sur Colab, Exécution → Modifier le type "
+                         "d'exécution → GPU. (--allow-cpu pour forcer.)")
 
 
 def load_configs(args) -> tuple[dict, dict, dict]:

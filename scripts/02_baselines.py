@@ -21,7 +21,7 @@ from facegeom.data.dataset import load_images
 from facegeom.eval.evaluate import evaluate, make_eval_pairs
 from facegeom.eval.verification import eer_threshold, rates_at_threshold
 from facegeom.reference import REFERENCES, cached_base_features, reference_projections
-from facegeom.stages import DONE, latest_done, open_stage, stage_lock, write_stage_meta
+from facegeom.stages import DONE, latest_done, select_stage, stage_lock, write_stage_meta
 from facegeom.utils import write_json
 from facegeom.viz import NAMES_FR, similarity_histograms
 
@@ -45,13 +45,11 @@ def main() -> None:
     runs.mkdir(parents=True, exist_ok=True)
 
     with stage_lock(runs, "baselines", None, args.force) as lock:
-        done = latest_done(runs, "baselines")
-        if done is not None and not args.new:
-            print(f"Mesures de base déjà faites : {done}")
+        stage = select_stage(runs, "baselines", None, args.new)
+        if stage is None:
             if args.export_results:
-                export(done)
+                export(latest_done(runs, "baselines"))
             return
-        stage = open_stage(runs, "baselines", None, args.new)
         write_stage_meta(stage, {"data": dcfg, "train": tcfg, "eval": ecfg}, vars(args), args.device)
 
         feats, labels = {}, {}

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 import time
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,9 +89,50 @@ def build_optimizer(model: EmbeddingNet, loss_fn, loss_name: str, params: dict,
                            weight_decay=float(ocfg["weight_decay"]))
 
 
-def _expected_params(loss_name: str, params: dict, seed: int, epochs: int) -> dict:
-    return {"loss": loss_name, "params": {k: float(v) for k, v in params.items()},
-            "seed": int(seed), "epochs": int(epochs)}
+RECIPE_KEYS = ("backbone", "head", "batch", "optimizer", "schedule",
+               "arcface_margin_warmup_epochs", "augment", "early_stopping")
+
+
+def run_identity(tcfg: dict, dcfg: dict, loss_name: str, params: dict, seed: int, epochs: int,
+                 schedule_epochs: int, max_steps_per_epoch: int | None) -> dict:
+    """Ce qui définit un run : perte, réglages, graine, durées et recette d'entraînement.
+
+    Écrit dans ``params.json`` ; un run existant n'est repris (ou réutilisé) que
+    si tout est identique. La recette comprend les sections de ``train.yaml``
+    qui changent l'entraînement, et la préparation des images.
+    """
+    identity = {
+        "loss": loss_name, "params": {k: float(v) for k, v in params.items()},
+        "seed": int(seed), "epochs": int(epochs), "schedule_epochs": int(schedule_epochs),
+        "recipe": {**{k: tcfg[k] for k in RECIPE_KEYS},
+                   "input_size": dcfg["input_size"], "normalize": dcfg["normalize"]},
+    }
+    if max_steps_per_epoch:
+        identity["max_steps_per_epoch"] = int(max_steps_per_epoch)  # essai rapide
+    return identity
+
+
+def _same_identity(stored: dict, expected: dict) -> bool:
+    """Égalité des identités, à l'arrondi près pour les réglages tirés au hasard."""
+    if set(stored) != set(expected) or stored["params"].keys() != expected["params"].keys():
+        return False
+    close = all(abs(stored["params"][k] - v) <= 1e-12 * max(1.0, abs(v))
+                for k, v in expected["params"].items())
+    rest = {k: v for k, v in stored.items() if k != "params"}
+    return close and rest == {k: v for k, v in expected.items() if k != "params"}
+
+
+class RunJournal:
+    """Messages d'un run : affichés et ajoutés à ``journal.txt`` dans son dossier."""
+
+    def __init__(self, run_dir: Path, log: Callable[[str], None]):
+        self.path = run_dir / "journal.txt"
+        self.log = log
+
+    def __call__(self, msg: str) -> None:
+        self.log(msg)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
 
 
 def train_run(
@@ -108,29 +150,48 @@ def train_run(
     log: Callable[[str], None] = print,
     heartbeat: Callable[[], None] | None = None,
     max_steps_per_epoch: int | None = None,
+    schedule_epochs: int | None = None,
 ) -> dict:
     """Entraîne (ou reprend, ou saute s'il est fini) un run ; renvoie son résumé.
 
     ``tcfg`` : ``configs/train.yaml`` ; ``dcfg`` : ``configs/data.yaml``.
+    ``schedule_epochs`` : durée sur laquelle le taux décroît en cosinus (défaut :
+    ``epochs``) ; le pilote fait 1 époque d'un calendrier de réglage complet.
     ``max_steps_per_epoch`` : époques raccourcies, pour un essai rapide seulement
     (noté dans ``params.json`` ; jamais pour un résultat du protocole).
+    Une erreur pendant le run est écrite dans ``journal.txt`` avant d'être relancée.
     """
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    schedule_epochs = int(schedule_epochs or epochs)
+    expected = run_identity(tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs,
+                            max_steps_per_epoch)
+    if (run_dir / "params.json").exists():
+        if not _same_identity(read_json(run_dir / "params.json"), expected):
+            raise ConfigMismatchError(
+                f"{run_dir} existe avec d'autres réglages ou une autre recette "
+                "(voir params.json). Utiliser un nouveau dossier (--new)."
+            )
+    else:
+        write_json(run_dir / "params.json", expected)
     if (run_dir / "result.json").exists():
         result = read_json(run_dir / "result.json")
         log(f"{run_dir.name} : déjà terminé (MAP@R {result.get('best_map_at_r')})")
         return result
 
-    expected = _expected_params(loss_name, params, seed, epochs)
-    if max_steps_per_epoch:
-        expected["max_steps_per_epoch"] = int(max_steps_per_epoch)
-    if (run_dir / "params.json").exists():
-        if read_json(run_dir / "params.json") != expected:
-            raise ConfigMismatchError(f"{run_dir} existe avec d'autres réglages.")
-    else:
-        write_json(run_dir / "params.json", expected)
+    journal = RunJournal(run_dir, log)
+    try:
+        return _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs, data,
+                      device, pretrained, keep_weights, journal, heartbeat, max_steps_per_epoch,
+                      expected)
+    except Exception:
+        journal(f"ERREUR, run interrompu :\n{traceback.format_exc()}")
+        raise
 
+
+def _train(run_dir, tcfg, dcfg, loss_name, params, seed, epochs, schedule_epochs, data, device,
+           pretrained, keep_weights, log, heartbeat, max_steps_per_epoch, expected) -> dict:
+    """Corps de ``train_run`` (mêmes paramètres)."""
     dev = torch.device(device)
     amp_dtype = autocast_dtype(dev, tcfg.get("amp", "auto"))
     channels_last = bool(tcfg.get("channels_last", False)) and dev.type == "cuda"
@@ -142,9 +203,10 @@ def train_run(
     steps_per_epoch = len(data.train_labels) // batch_size
     if max_steps_per_epoch:
         steps_per_epoch = min(steps_per_epoch, int(max_steps_per_epoch))
-    total_steps = steps_per_epoch * int(epochs)
-    warmup_steps = int(round(float(tcfg["schedule"]["warmup_epochs"]) * steps_per_epoch))
+    total_steps = steps_per_epoch * schedule_epochs
+    warmup_steps = round(float(tcfg["schedule"]["warmup_epochs"]) * steps_per_epoch)
     margin_warmup = float(tcfg["arcface_margin_warmup_epochs"])
+    checkpoint_every = int(tcfg.get("checkpoint_every", 1))
 
     set_seed(seed)
     model = EmbeddingNet(load_backbone(tcfg["backbone"], pretrained), hcfg["in_dim"],
@@ -157,9 +219,11 @@ def train_run(
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda t: lr_factor(t, warmup_steps, total_steps)
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_dtype == torch.float16)
+    scaler = torch.amp.GradScaler("mps" if dev.type == "mps" else "cuda",
+                                  enabled=amp_dtype == torch.float16)
     augment = GpuAugment(dcfg["input_size"], dcfg["normalize"]["mean"], dcfg["normalize"]["std"],
                          acfg["scale"], acfg["ratio"], acfg["flip_p"], dev)
+    precision = str(amp_dtype).replace("torch.", "") if amp_dtype else "float32"
 
     history: list[dict] = []
     best = {"map_at_r": -1.0, "epoch": 0}
@@ -170,10 +234,13 @@ def train_run(
         loss_fn.load_state_dict(ckpt["loss"])
         optimizer.load_state_dict(ckpt["optimizer"])
         scheduler.load_state_dict(ckpt["scheduler"])
-        scaler.load_state_dict(ckpt["scaler"])
+        if scaler.is_enabled() and ckpt["scaler"]:  # précision changée de session en session
+            scaler.load_state_dict(ckpt["scaler"])
         history, best, bad_epochs = ckpt["history"], ckpt["best"], ckpt["bad_epochs"]
         start_epoch, elapsed = ckpt["epoch"] + 1, ckpt["elapsed"]
-        log(f"{run_dir.name} : reprise à l'époque {start_epoch}")
+        log(f"{run_dir.name} : reprise à l'époque {start_epoch} ({precision})")
+    else:
+        log(f"{run_dir.name} : début, {steps_per_epoch} pas par époque, {precision}, {device}")
 
     patience = int(tcfg["early_stopping"]["patience"])
     status = "done"
@@ -189,7 +256,6 @@ def train_run(
                               num_workers, pin_memory=dev.type == "cuda")
         gen = augment_generator(seed, epoch)
         loss_sum = torch.zeros((), device=dev)
-        skipped = 0
         for i, (images, labels) in enumerate(loader):
             step = (epoch - 1) * steps_per_epoch + i
             if loss_name == "arcface":
@@ -204,12 +270,9 @@ def train_run(
                 emb = model(x)
             loss = compute_loss(loss_fn, miner, emb.float(), labels)
             optimizer.zero_grad(set_to_none=True)
-            if loss.requires_grad:
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                skipped += 1
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             scheduler.step()
             loss_sum += loss.detach()
             if (i + 1) % 50 == 0 or i + 1 == steps_per_epoch:
@@ -223,19 +286,24 @@ def train_run(
                 log(f"   époque {epoch} pas {i + 1}/{steps_per_epoch} : perte "
                     f"{loss_sum.item() / (i + 1):.4f}, {rate:.0f} images/s")
         if status == "diverged":
-            log(f"{run_dir.name} : perte non finie à l'époque {epoch}, arrêt du run")
+            log(f"{run_dir.name} époque {epoch} : perte non finie, arrêt du run (divergé)")
             break
         t_train = time.perf_counter() - t0
 
-        val = embed_images(model, data.val_images, augment, int(tcfg["eval_batch_size"]),
-                           amp_dtype, channels_last)
+        try:
+            val = embed_images(model, data.val_images, augment, int(tcfg["eval_batch_size"]),
+                               amp_dtype, channels_last)
+        except FloatingPointError as err:  # réseau détruit : run consigné comme divergé
+            status = "diverged"
+            log(f"{run_dir.name} époque {epoch} : {err}, arrêt du run (divergé)")
+            break
         metrics = summarize(retrieval_per_query(val, data.val_labels))
         t_eval = time.perf_counter() - t0 - t_train
         elapsed += t_train + t_eval
         row = {"epoch": epoch, "train_loss": loss_sum.item() / steps_per_epoch,
                "lr_head": optimizer.param_groups[1]["lr"], **metrics,
                "seconds_train": round(t_train, 1), "seconds_eval": round(t_eval, 1),
-               "skipped_batches": skipped}
+               "precision": precision}
         if loss_name == "arcface":
             row["margin"] = float(loss_fn.margin)
         history.append(row)
@@ -246,15 +314,17 @@ def train_run(
         if metrics["map_at_r"] > best["map_at_r"]:
             best = {"map_at_r": metrics["map_at_r"], "epoch": epoch, **metrics}
             bad_epochs = 0
-            save_torch({k: v.detach().cpu() for k, v in model.state_dict().items()},
-                       run_dir / "best.pt")
+            if keep_weights:
+                save_torch({k: v.detach().cpu() for k, v in model.state_dict().items()},
+                           run_dir / "best.pt")
         else:
             bad_epochs += 1
         pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
-        save_torch({"epoch": epoch, "model": model.state_dict(), "loss": loss_fn.state_dict(),
-                    "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
-                    "scaler": scaler.state_dict(), "history": history, "best": best,
-                    "bad_epochs": bad_epochs, "elapsed": elapsed}, run_dir / "last.pt")
+        if epoch % checkpoint_every == 0 and epoch < int(epochs) and bad_epochs < patience:
+            save_torch({"epoch": epoch, "model": model.state_dict(), "loss": loss_fn.state_dict(),
+                        "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
+                        "scaler": scaler.state_dict(), "history": history, "best": best,
+                        "bad_epochs": bad_epochs, "elapsed": elapsed}, run_dir / "last.pt")
         if heartbeat:
             heartbeat()
         if bad_epochs >= patience:
@@ -262,8 +332,9 @@ def train_run(
 
     n_done = len(history)
     result = {
-        **expected,
+        **{k: v for k, v in expected.items() if k != "recipe"},
         "status": status,
+        "precision": precision,
         "best_epoch": best["epoch"],
         "best_map_at_r": best["map_at_r"] if best["epoch"] else None,
         "best_p_at_1": best.get("p_at_1"),
@@ -278,9 +349,9 @@ def train_run(
         if history else None,
     }
     write_json(run_dir / "result.json", result)
+    log(f"{run_dir.name} : terminé ({status}), meilleur MAP@R {result['best_map_at_r']} "
+        f"à l'époque {result['best_epoch']}")
     (run_dir / "last.pt").unlink(missing_ok=True)
-    if not keep_weights:
-        (run_dir / "best.pt").unlink(missing_ok=True)
     return result
 
 

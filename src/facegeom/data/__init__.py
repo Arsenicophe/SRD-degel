@@ -1,1 +1,1 @@
-"""Accès aux données : téléchargement, partitions."""
+"""Données : partition, recadrage, cache des carrés, lots, augmentations."""

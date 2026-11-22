@@ -27,6 +27,8 @@ early_stopping: {patience: 5}       # époques sans progrès du MAP@R de validat
 amp: auto                           # précision mixte sur GPU : bf16 si possible, sinon fp16 [à valider]
 channels_last: true                 # format mémoire plus rapide sur GPU
 eval_batch_size: 512
+checkpoint_every: 1                 # point de reprise sur Drive toutes les N époques (voir le guide :
+                                    # la corbeille de Drive garde les anciennes versions)
 num_workers: auto                   # processus de lecture des lots ; auto = min(8, cœurs − 1)
 
 pilot: {epochs: 1, seed: 100}       # réglages au centre des plages

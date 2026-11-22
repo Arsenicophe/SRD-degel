@@ -31,3 +31,4 @@ __pycache__/
 /results/*.npz
 /logs/
 /runs_essai/
+/runs_essai2/

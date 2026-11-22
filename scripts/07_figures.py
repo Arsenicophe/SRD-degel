@@ -52,15 +52,15 @@ def main() -> None:
     args = p.parse_args()
     _, _, ecfg = load_configs(args)
     ev = Path(args.eval)
-    out = Path(args.out) if args.out else ev / "figures"
+    out = Path(args.out) if args.out else ev / ("figures_en" if args.en else "figures")
     out.mkdir(parents=True, exist_ok=True)
     split = read_json(ev / "meta.json")["args"]["split"]
     names = NAMES_EN if args.en else NAMES_FR
 
     per_seed = pd.read_csv(ev / "per_seed.csv")
     summary = pd.read_csv(ev / "summary.csv")
-    methods = [m for m in ORDER if m in set(per_seed.method)]
     scores = np.load(ev / "scores_seed0.npz")
+    methods = [m for m in ORDER if m in set(per_seed.method) and m in scores.files]
     y = scores["y"]
     mapr = summary[summary.metric == "map_at_r"].set_index("method")["mean"]
 
@@ -106,8 +106,10 @@ def main() -> None:
                  "correct": [bool(labels[j] == labels[q]) for j in nn[q]],
                  "sims": [float(x[q] @ x[j]) for j in nn[q]]} for q in queries]
         hits = sum(sum(r["correct"]) for r in rows)
-        neighbors_sheet(rows, out / f"{split}_voisins_{m}.png",
-                        f"{names.get(m, m)} : {hits}/{len(rows) * nc['n_neighbors']} bons voisins")
+        total = len(rows) * nc["n_neighbors"]
+        title = (f"{names.get(m, m)}: {hits}/{total} correct neighbours" if args.en
+                 else f"{names.get(m, m)} : {hits}/{total} bons voisins")
+        neighbors_sheet(rows, out / f"{split}_voisins_{m}.png", title, en=args.en)
     print("Figures dans", out)
 
 

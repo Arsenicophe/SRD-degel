@@ -183,6 +183,23 @@ exactement comme dans l'ancien protocole.
 - Pas de règle de décision : le réseau est fixé. Ces mesures servent de repères
   pour lire ce que les pertes apportent.
 
+### Résultat (étape 2, validation, 22 novembre 2026)
+
+Calculé sur le Mac (GPU Apple), dossier `runs/20261122-021645_2_baselines`,
+résumé versionné dans `results/2_baselines_val.json`. En % sauf alignement et
+uniformité.
+
+| Version | MAP@R | P@1 | R-Precision | AUC | TAR à FAR 10⁻³ | Alignement | Uniformité |
+|---|---|---|---|---|---|---|---|
+| brut (512) | 3,02 | 23,3 | 5,70 | 74,8 | 2,9 | 0,32 | −0,84 |
+| brut (ACP 128) | 3,01 | 22,0 | 5,75 | 81,1 | 3,7 | 1,43 | −3,56 |
+| LDA 128 | 5,13 | 30,3 | 9,05 | 82,9 | 8,8 | 1,66 | −3,91 |
+
+Lecture : le brut (3,0) est un peu sous celui de l'ancien ResNet-50 Barlow Twins
+gelé (4,01), et la LDA ne gagne que 2 points sur le brut (5,13, contre 13,23
+pour l'ancien réseau) : une transformation linéaire du réseau de départ récupère
+peu d'information d'identité.
+
 ---
 
 ## 6. Les quatre fonctions de coût
@@ -240,11 +257,15 @@ de 256).
   époque ; on garde la meilleure époque ; arrêt après **5 époques sans
   progrès**.
 - **Précision mixte** **[à valider]** : sur GPU, le réseau calcule en bfloat16
-  quand la carte le permet (A100, L4), sinon en float16 avec mise à l'échelle
-  des gradients ; la perte est toujours calculée en float32. Même réglage pour
-  les 4 pertes. Raison : vitesse.
-- **Point de reprise à chaque époque**, sur Drive : un entraînement coupé
-  reprend à l'époque suivante.
+  sur les cartes qui le gèrent nativement (A100, L4), en float16 avec mise à
+  l'échelle des gradients sur les autres (T4) ; la perte est toujours calculée
+  en float32. Même réglage pour les 4 pertes ; la précision de chaque époque est
+  notée dans `history.csv`. Raison : vitesse. Les mesures de base (section 5)
+  restent en float32 partout.
+- **Point de reprise à chaque époque**, sur Drive (`checkpoint_every` dans
+  `configs/train.yaml`) : un entraînement coupé reprend à l'époque suivante.
+  Un run déjà commencé n'est repris que si ses réglages et sa recette sont
+  identiques (`params.json`) ; sinon il faut un nouveau dossier.
 
 ---
 
@@ -255,6 +276,8 @@ de 256).
 - **Une époque par perte**, réglages au **centre des plages** (milieu pour les
   plages linéaires, moyenne géométrique pour les plages logarithmiques),
   graine 100. **[à valider]**
+- Cette époque est exactement la première époque d'un tirage de réglage : montée
+  du taux pendant l'époque, cosinus calculé sur les 20 époques d'un tirage.
 - Sorties : durée d'une époque, MAP@R de validation après une époque comparé au
   brut (ACP 128), estimation du temps total du réglage et des entraînements
   finaux.
@@ -270,6 +293,11 @@ de 256).
   (valeur de départ, ajustable selon le pilote, la même pour les 4 pertes).
 - **Graine de réglage : 100**, pour les tirages et pour l'entraînement.
 - **Critère** : meilleur **MAP@R en validation** (meilleure époque du tirage).
+- **Tirage qui diverge** (perte non finie, ou réseau qui ne sort plus que des
+  vecteurs nuls) : arrêté et consigné « divergé » dans son `result.json` ; il
+  compte dans les 10 tirages, avec son meilleur MAP@R avant la divergence (aucun
+  s'il n'a fini aucune époque). Si tous les tirages d'une perte divergent, pas de
+  graines finales pour elle : discussion en groupe. **[à valider]**
 
 ### Plages retenues
 
@@ -388,8 +416,13 @@ entre groupes. Les conclusions viennent des mesures chiffrées.
 
 ### Garde du test
 
-Le script d'évaluation écrit un fichier `TEST_CONSULTED.json` dans le dossier
-des runs à la première lecture du test, et refuse toute seconde lecture.
+Avant de lire le test, le script d'évaluation vérifie tout ce qui peut l'être :
+les 4 pertes et toutes leurs graines, aucune divergée ni raccourcie, les
+méthodes classiques calculées, les caches complets. Il écrit ensuite
+`TEST_CONSULTED.json` dans le dossier des runs, puis refuse toute seconde
+lecture. Une lecture interrompue avant la fin (coupure de Colab) ne peut être
+refaite qu'avec `--retry-interrupted-test`, et chaque tentative est notée dans
+le fichier.
 
 ---
 
@@ -405,7 +438,9 @@ dans cette copie sans discussion de groupe.
 | Fisherfaces | Belhumeur et al., 1997 | ACP à 512 dimensions, puis LDA à 128 | cosinus |
 | LBP | Ahonen et al., 2006 | histogrammes de motifs binaires locaux (8 voisins, rayon 2, uniformes) sur une grille 7 × 7 | distance du khi-deux |
 
-- Images en niveaux de gris, 64 × 64, tirées du même carré de 128 px.
+- Eigenfaces et Fisherfaces : images en niveaux de gris, 64 × 64, tirées du
+  même carré de 128 px. LBP : sur le carré de 128 px entier, en niveaux de gris
+  (choix de la copie de travail). **[à valider]**
 - LBP se compare par khi-deux et non par cosinus : entorse à « même mesure
   partout », à écrire.
 
@@ -441,7 +476,16 @@ dans cette copie sans discussion de groupe.
   - résultats : `MyDrive/srd-degel/runs/` sur Drive.
 - **Reprise** : chaque entraînement écrit un point de reprise à chaque époque ;
   le réglage et les entraînements finaux sautent ce qui est déjà terminé et
-  reprennent ce qui a été coupé.
+  reprennent ce qui a été coupé (le dossier le plus récent de l'étape, s'il n'est
+  pas terminé).
+- **Journal** : chaque run écrit ses messages, et une éventuelle erreur, dans
+  `journal.txt` ; un run divergé garde son `result.json` (règle 5).
+- **Essais rapides** (`--max-steps`) : dossiers à part, suffixés `_essai`, jamais
+  pris pour des résultats du protocole ni pour le test.
+- **Corbeille de Drive** : remplacer un point de reprise chaque époque envoie
+  l'ancien dans la corbeille de Drive, qui compte dans le quota. À vérifier
+  après le pilote ; si elle grossit trop, la vider ou augmenter
+  `checkpoint_every`. **[à valider]**
 - **Verrou** : un dossier de réglage ou d'entraînement final ne peut être
   utilisé que par une seule session à la fois (leçon de l'incident triplet du
   15 novembre). Une session qui trouve un verrou récent refuse de démarrer.
@@ -493,3 +537,5 @@ dans cette copie sans discussion de groupe.
 | Date | Modification |
 |---|---|
 | 2026-11-22 | Création du protocole « réseau entraîné en entier », avec l'accord de l'encadrant. Décisions reprises des notes de travail d'Arsène, versions 1 à 7 (`docs/notes/`). Bonnes pratiques de l'ancien protocole reprises (section 12) |
+| 2026-11-22 | Étape 1 sur le Mac : cache des carrés (train 161 602 images en 94 s, val 19 720 en 7 s). Étape 2 sur le Mac : mesures de base sur la validation (section 5, résultat). Le test n'est pas lu |
+| 2026-11-22 | Après l'essai réel sur le Mac et la relecture du code : tirage divergé consigné sans arrêter le réglage ; pilote = première époque d'un tirage ; essais rapides à part ; garde du test renforcée ; précision float16 sur T4 ; journal par run ; points [à valider] ajoutés (sections 7, 8, 11, 13) |

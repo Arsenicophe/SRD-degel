@@ -17,7 +17,7 @@ from facegeom.classical import PixelProjections, extract_pixels
 from facegeom.cli import parser
 from facegeom.data.cache import cache_file, open_cache
 from facegeom.data.dataset import read_split
-from facegeom.stages import DONE, latest_done, open_stage, stage_lock, write_stage_meta
+from facegeom.stages import DONE, select_stage, stage_lock, write_stage_meta
 from facegeom.utils import load_config, resolve_workers, write_json
 
 
@@ -34,11 +34,9 @@ def main() -> None:
     size = dcfg["crop"]["size"]
 
     with stage_lock(runs, "classical", None, args.force) as lock:
-        done = latest_done(runs, "classical")
-        if done is not None and not args.new:
-            print(f"Méthodes classiques déjà calculées : {done}")
+        stage = select_stage(runs, "classical", None, args.new)
+        if stage is None:
             return
-        stage = open_stage(runs, "classical", None, args.new)
         write_stage_meta(stage, {"data": dcfg, "classical": ccfg}, vars(args), "cpu")
 
         pixels, labels = {}, {}

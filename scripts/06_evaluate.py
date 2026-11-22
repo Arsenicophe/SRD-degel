@@ -33,49 +33,91 @@ from facegeom.models.network import autocast_dtype, embed_images
 from facegeom.reference import REFERENCES, cached_base_features, eval_augment, reference_projections
 from facegeom.stages import latest_done
 from facegeom.train import load_trained
-from facegeom.utils import new_run_dir, run_info, write_json
+from facegeom.utils import new_run_dir, read_json, run_info, write_json
 
 MARKER = "TEST_CONSULTED.json"
 CLASSICAL = [("eigenfaces", "cosine"), ("fisherfaces", "cosine"), ("lbp", "chi2")]
 
 
-def final_runs(runs: Path, seeds: list[int], require_all: bool) -> dict[str, dict[int, Path]]:
-    """``{perte: {graine: dossier}}`` des derniers entraînements finaux terminés."""
+def final_runs(runs: Path, seeds: list[int], require_all: bool,
+               essai: bool = False) -> dict[str, dict[int, Path]]:
+    """``{perte: {graine: dossier}}`` des derniers entraînements finaux terminés.
+
+    Pour le test (``require_all``) : les 4 pertes, toutes les graines, et aucun
+    run divergé ou raccourci.
+    """
     out: dict[str, dict[int, Path]] = {}
     for loss in LOSSES:
-        stage = latest_done(runs, "final", loss)
+        stage = latest_done(runs, "final", loss, essai=essai)
         if stage is None:
             if require_all:
                 raise SystemExit(f"Test refusé : pas d'entraînements finaux terminés pour {loss}.")
             print(f"{loss} : pas d'entraînements finaux terminés, perte ignorée")
             continue
-        out[loss] = {s: stage / f"seed{s}" for s in seeds if (stage / f"seed{s}" / "best.pt").exists()}
-        if require_all and sorted(out[loss]) != sorted(seeds):
+        out[loss] = {s: stage / f"seed{s}" for s in seeds
+                     if (stage / f"seed{s}" / "best.pt").exists()}
+        if not require_all:
+            continue
+        if sorted(out[loss]) != sorted(seeds):
             raise SystemExit(f"Test refusé : graines manquantes pour {loss} dans {stage}.")
+        for d in out[loss].values():
+            r = read_json(d / "result.json")
+            if r["status"] != "done" or "max_steps_per_epoch" in r:
+                raise SystemExit(f"Test refusé : {d} est divergé ou raccourci.")
     return out
+
+
+def check_test_marker(runs: Path, retry: bool) -> list:
+    """Tentatives précédentes de lecture du test ; refuse une seconde lecture.
+
+    Une lecture interrompue (marqueur « commencé », sans résultat) ne peut être
+    refaite qu'avec ``--retry-interrupted-test``, et chaque tentative est notée.
+    """
+    path = runs / MARKER
+    if not path.exists():
+        return []
+    marker = read_json(path)
+    if marker.get("status") != "commencé":
+        raise SystemExit(f"Test déjà consulté : {path.read_text()}")
+    if not retry:
+        raise SystemExit(f"Une lecture du test a été interrompue ({path.read_text()}). "
+                         "Pour la refaire : --retry-interrupted-test (la tentative sera notée).")
+    return marker.get("attempts", [])
 
 
 def main() -> None:
     p = parser(__doc__)
     p.add_argument("--split", default="val", choices=["val", "test"])
     p.add_argument("--confirm-test", action="store_true", help="obligatoire avec --split test")
+    p.add_argument("--retry-interrupted-test", action="store_true",
+                   help="refaire une lecture du test interrompue avant la fin")
     p.add_argument("--classical-dir", default=None,
                    help="dossier de scripts/08_classical.py (défaut : le dernier terminé)")
+    p.add_argument("--essai", action="store_true",
+                   help="évaluer les graines d'essai rapide (validation seulement)")
     args = p.parse_args()
     dcfg, tcfg, ecfg = load_configs(args)
     runs = Path(args.runs_dir)
     seeds = [int(s) for s in tcfg["final"]["seeds"]]
     is_test = args.split == "test"
+    splits = ["val", "test"] if is_test else ["val"]
 
+    # Toutes les vérifications avant de toucher au test
+    attempts = []
     if is_test:
         if not args.confirm_test:
             raise SystemExit("Le test n'est évalué qu'une fois : ajouter --confirm-test.")
-        if (runs / MARKER).exists():
-            raise SystemExit(f"Test déjà consulté : {(runs / MARKER).read_text()}")
-    finals = final_runs(runs, seeds, require_all=is_test)
+        if args.essai:
+            raise SystemExit("Le test ne s'évalue jamais sur des essais rapides.")
+        attempts = check_test_marker(runs, args.retry_interrupted_test)
+    finals = final_runs(runs, seeds, require_all=is_test, essai=args.essai)
     classical_dir = (Path(args.classical_dir) if args.classical_dir
                      else latest_done(runs, "classical"))
+    if is_test and classical_dir is None:
+        raise SystemExit("Test refusé : lancer d'abord scripts/08_classical.py (méthodes classiques).")
     baselines_dir = latest_done(runs, "baselines")
+    for sp in ["train", *splits]:
+        load_images(dcfg, args.cache_dir, sp)  # caches complets, sinon arrêt ici
 
     out = new_run_dir(runs, f"6_eval_{args.split}")
     write_json(out / "meta.json", {
@@ -83,10 +125,10 @@ def main() -> None:
         "run": run_info(args.device), "baselines": baselines_dir and baselines_dir.name,
         "classical": classical_dir and classical_dir.name,
         "finals": {k: {s: str(d) for s, d in v.items()} for k, v in finals.items()}})
-    if is_test:  # avant toute lecture du test
-        write_json(runs / MARKER, {"status": "commencé", "run": out.name, "date": run_info()["date"]})
+    if is_test:  # juste avant la première lecture du test
+        attempts.append({"run": out.name, "date": run_info()["date"]})
+        write_json(runs / MARKER, {"status": "commencé", "attempts": attempts})
 
-    splits = ["val", "test"] if is_test else ["val"]
     images, labels, names, ep = {}, {}, {}, {}
     for sp in splits:
         images[sp], labels[sp] = load_images(dcfg, args.cache_dir, sp)
@@ -168,7 +210,8 @@ def main() -> None:
         print(f"  {r.a:12} {s['mean']:5.2f}  [{s.ci_low:5.2f} ; {s.ci_high:5.2f}]  "
               f"[{r.ci_low:5.2f} ; {r.ci_high:5.2f}]")
     if is_test:
-        write_json(runs / MARKER, {"status": "terminé", "run": out.name, "date": run_info()["date"]})
+        write_json(runs / MARKER, {"status": "terminé", "run": out.name,
+                                   "date": run_info()["date"], "attempts": attempts})
         print(f"\nTest consulté : {runs / MARKER}. Aucune autre évaluation du test.")
     print("Résultats dans", out)
 

@@ -1,1 +1,1 @@
-"""Évaluation : recherche, vérification, statistiques."""
+"""Évaluation : recherche, vérification, géométrie, statistiques."""

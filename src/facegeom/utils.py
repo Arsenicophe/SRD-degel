@@ -16,7 +16,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-PACKAGES = ["torch", "torchvision", "numpy", "scikit-learn", "scipy", "pytorch-metric-learning"]
+PACKAGES = ["torch", "torchvision", "numpy", "scipy", "scikit-learn", "scikit-image", "pandas",
+            "pillow", "matplotlib", "pytorch-metric-learning"]
 REPO_DIR = Path(__file__).resolve().parents[2]
 
 

@@ -63,14 +63,23 @@ repli (protocole, section 1). Une décision prise s'écrit dans
   cellule. Les runs finis sont sautés, le run coupé reprend à sa dernière époque.
 - Si une cellule refuse de démarrer à cause d'un **verrou**, c'est qu'une autre
   session travaille sur la même perte. Si cette session est bien arrêtée,
-  attendre 15 minutes ou ajouter `--force` à la commande.
+  attendre 15 minutes ou ajouter `--force` à la commande. Avec `--loss all`, une
+  perte prise par une autre session est sautée et les autres continuent.
+- Un tirage qui **diverge** est arrêté et noté « diverged » dans son
+  `result.json` ; le réglage passe au tirage suivant.
+- **Corbeille de Drive** : chaque point de reprise remplacé part dans la
+  corbeille, qui compte dans le quota. Après le pilote, regarder la taille de la
+  corbeille de Drive ; la vider de temps en temps pendant le réglage.
 
 ## 5. Évaluation, figures, test
 
 - Cellule **Méthodes classiques** : sur processeur, à n'importe quel moment.
 - Cellule **Étape 6** : évaluation sur la validation et figures, dans
   `MyDrive/srd-degel/runs/<date>_6_eval_val/`.
-- Cellule **Étape 7** : le **test, une seule fois**, quand tout est décidé.
+- Cellule **Étape 7** : le **test, une seule fois**, quand tout est décidé. Il
+  faut les 4 pertes avec leurs 3 graines et les méthodes classiques. Si la
+  session est coupée pendant la lecture du test, la relancer avec
+  `--retry-interrupted-test` (la tentative est notée).
 
 ## Où sont les résultats
 

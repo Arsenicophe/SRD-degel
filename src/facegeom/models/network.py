@@ -104,14 +104,20 @@ class EmbeddingNet(nn.Module):
 def autocast_dtype(device: torch.device | str, amp: str | bool) -> torch.dtype | None:
     """Type de calcul de la précision mixte, ou ``None`` pour du float32 partout.
 
-    ``amp`` : ``auto`` (bfloat16 si la carte le permet, sinon float16, et rien
-    hors CUDA), ``bf16``, ``fp16`` ou ``false``.
+    ``amp`` : ``auto`` (sur CUDA : bfloat16 si la carte le gère nativement,
+    capacité ≥ 8, sinon float16 avec mise à l'échelle des gradients ; ailleurs :
+    float32), ``bf16``, ``fp16`` ou ``false``. Sur le GPU
+    d'un Mac (``mps``), seul ``fp16`` active la précision mixte (essais locaux).
     """
     device = torch.device(device)
-    if amp in (False, "false", "off", None) or device.type != "cuda":
+    if amp in (False, "false", "off", None):
         return None
-    if amp == "bf16" or (amp == "auto" and torch.cuda.is_bf16_supported()):
-        return torch.bfloat16
+    if device.type == "mps":
+        return torch.float16 if amp == "fp16" else None
+    if device.type != "cuda":
+        return None
+    if amp == "bf16" or (amp == "auto" and torch.cuda.get_device_capability(device)[0] >= 8):
+        return torch.bfloat16  # A100, L4… : bfloat16 natif ; T4 (7.5) : float16 + GradScaler
     return torch.float16
 
 
@@ -156,5 +162,7 @@ def embed_images(
     model.train(was_training)
     result = np.concatenate(out) if out else np.empty((0, 0), dtype=np.float32)
     if not np.isfinite(result).all():
-        raise FloatingPointError("Vecteurs non finis en sortie du réseau.")
+        raise FloatingPointError("vecteurs non finis en sortie du réseau")
+    if len(result) and (np.abs(result).max(axis=1) == 0).any():
+        raise FloatingPointError("vecteurs nuls en sortie du réseau (réseau dégénéré)")
     return result

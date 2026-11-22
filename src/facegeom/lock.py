@@ -98,7 +98,7 @@ class DirLock:
         if current is not None and current.get("token") == self.token:
             self.path.unlink(missing_ok=True)
 
-    def __enter__(self) -> DirLock:
+    def __enter__(self) -> DirLock:  # noqa: PYI034
         self.acquire()
         return self
 

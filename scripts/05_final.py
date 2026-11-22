@@ -11,10 +11,11 @@ Relancer la même commande reprend là où le travail a été coupé.
 
 from pathlib import Path
 
-from facegeom.cli import load_configs, parse_index_list, parser, require_baselines
+from facegeom.cli import check_device, load_configs, parse_index_list, parser, require_baselines
 from facegeom.data.dataset import load_train_data
+from facegeom.lock import LockedError
 from facegeom.losses import LOSSES
-from facegeom.stages import latest_done, open_stage, run_final, stage_lock, write_stage_meta
+from facegeom.stages import latest_done, run_final, select_stage, stage_lock, write_stage_meta
 from facegeom.utils import read_json
 
 
@@ -23,36 +24,53 @@ def main() -> None:
     p.add_argument("--loss", required=True, choices=[*LOSSES, "all"])
     p.add_argument("--seeds", default=None, help="ex. « 0-2 » ; défaut : graines de la configuration")
     p.add_argument("--tune-dir", default=None, help="dossier de réglage (défaut : le dernier terminé)")
-    p.add_argument("--new", action="store_true")
+    p.add_argument("--new", action="store_true", help="refaire des graines terminées (nouveau dossier)")
     p.add_argument("--force", action="store_true")
-    p.add_argument("--max-steps", type=int, default=None, help="essai rapide seulement")
+    p.add_argument("--max-steps", type=int, default=None,
+                   help="essai rapide seulement (dossiers « essai » à part)")
     args = p.parse_args()
+    check_device(args)
     dcfg, tcfg, _ = load_configs(args)
     runs = Path(args.runs_dir)
+    essai = args.max_steps is not None
     require_baselines(runs)
     losses = list(LOSSES) if args.loss == "all" else [args.loss]
     if args.tune_dir and len(losses) > 1:
         raise SystemExit("--tune-dir ne va qu'avec une seule perte.")
     data = load_train_data(dcfg, args.cache_dir)
 
+    skipped = []
     for loss in losses:
-        tune_dir = Path(args.tune_dir) if args.tune_dir else latest_done(runs, "tune", loss)
-        if tune_dir is None or not (tune_dir / "best.json").exists():
+        tune_dir = (Path(args.tune_dir) if args.tune_dir
+                    else latest_done(runs, "tune", loss, essai=essai))
+        if tune_dir is None:
             print(f"{loss} : aucun réglage terminé, graines finales impossibles pour l'instant")
+            continue
+        if not (tune_dir / "best.json").exists():
+            print(f"{loss} : réglage terminé sans tirage valide ({tune_dir}) : à discuter")
             continue
         best = read_json(tune_dir / "best.json")
         if best["loss"] != loss:
             raise SystemExit(f"{tune_dir} est le réglage de {best['loss']}, pas de {loss}.")
-        with stage_lock(runs, "final", loss, args.force) as lock:
-            done = latest_done(runs, "final", loss)
-            if done is not None and not args.new:
-                print(f"{loss} : graines finales déjà terminées dans {done}")
+        lock = stage_lock(runs, "final", loss, args.force, essai)
+        try:
+            lock.acquire()
+        except LockedError as err:
+            print(f"{loss} : sautée. {err}")
+            skipped.append(loss)
+            continue
+        try:
+            stage = select_stage(runs, "final", loss, args.new, essai)
+            if stage is None:
                 continue
-            stage = open_stage(runs, "final", loss, args.new)
             write_stage_meta(stage, {"data": dcfg, "train": tcfg}, vars(args), args.device)
             run_final(stage, tcfg, dcfg, loss, best, tune_dir.name, data, args.device,
                       seeds=parse_index_list(args.seeds), heartbeat=lock.heartbeat,
                       max_steps_per_epoch=args.max_steps)
+        finally:
+            lock.release()
+    if skipped:
+        raise SystemExit(f"Pertes prises par une autre session : {skipped}")
 
 
 if __name__ == "__main__":
