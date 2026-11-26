@@ -292,7 +292,7 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
 - **Arrêt précoce** (repris) : MAP@R mesuré sur la validation à la fin de chaque
   époque ; on garde la meilleure époque ; arrêt après **5 époques sans
   progrès**.
-- **Précision mixte** **[à valider]** : sur GPU, le réseau calcule en bfloat16
+- **Précision mixte** (**validé le 26 novembre**) : sur GPU, le réseau calcule en bfloat16
   sur les cartes qui le gèrent nativement (A100, L4), en float16 avec mise à
   l'échelle des gradients sur les autres (T4) ; la perte est toujours calculée
   en float32. Même réglage pour les 4 pertes ; la précision de chaque époque est
@@ -311,7 +311,7 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
 
 - **Une époque par perte**, réglages au **centre des plages** (milieu pour les
   plages linéaires, moyenne géométrique pour les plages logarithmiques),
-  graine 100. **[à valider]**
+  graine 100. (**validé le 26 novembre**)
 - Cette époque est exactement la première époque d'un tirage de réglage : montée
   du taux pendant l'époque, cosinus calculé sur les 15 époques d'un tirage.
 - Sorties : durée d'une époque, MAP@R de validation après une époque comparé au
@@ -334,7 +334,8 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
   vecteurs nuls) : arrêté et consigné « divergé » dans son `result.json` ; il
   compte dans les 10 tirages, avec son meilleur MAP@R avant la divergence (aucun
   s'il n'a fini aucune époque). Si tous les tirages d'une perte divergent, pas de
-  graines finales pour elle : discussion en groupe. **[à valider]**
+  graines finales pour elle : discussion en groupe. (**validé le 26 novembre** ; aucune perte
+  n'a eu tous ses tirages divergés)
 
 ### Plages retenues
 
@@ -343,7 +344,7 @@ après 3 époques : `nsoftmax` 44,9, `arcface` 51,9). Recette retenue :
   avec de la marge.
 - `nsoftmax` et `arcface` : plages **resserrées autour des valeurs qui ont marché**
   au pilote du 22 novembre (taux 0,1, taux de la matrice 0,1, *s* = 32,
-  *m* = 0,5), décision du 22 novembre. **[à valider]** pour les bornes exactes.
+  *m* = 0,5), décision du 22 novembre. Bornes exactes du tableau ci-dessous (**validé le 26 novembre**).
 
 | Perte | Paramètre | Musgrave (4 valeurs) | Essai du 17 nov. | Plage retenue |
 |---|---|---|---|---|
@@ -397,7 +398,7 @@ le meilleur de 5 tirages.
   - On tire avec remise autant d'identités qu'il y en a dans la partie (951 au
     test, 924 en validation), 1 000 fois, graine 0.
   - Score d'un tirage : moyenne des AP@R par requête des images des identités
-    tirées, chaque requête restant comparée à toute la partie. **[à valider]**
+    tirées, chaque requête restant comparée à toute la partie. (**validé le 26 novembre**)
   - IC : du 2,5e au 97,5e centile. Pour comparer deux pertes, **même tirage**
     pour les deux.
 
@@ -537,7 +538,8 @@ conditions proches de son article d'origine.
 - **Corbeille de Drive** : remplacer un point de reprise chaque époque envoie
   l'ancien dans la corbeille de Drive, qui compte dans le quota. À vérifier
   après le pilote ; si elle grossit trop, la vider ou augmenter
-  `checkpoint_every`. **[à valider]**
+  `checkpoint_every`. (**validé le 26 novembre** : la corbeille est vidée une fois les runs
+  terminés)
 - **Verrou** : un dossier de réglage ou d'entraînement final ne peut être
   utilisé que par une seule session à la fois (leçon de l'incident triplet du
   15 novembre). Une session qui trouve un verrou récent refuse de démarrer.
@@ -602,3 +604,5 @@ conditions proches de son article d'origine.
 | 2026-11-22 | Section 11 : réglages des méthodes classiques décidés (délégation d'Arsène) : Eigenfaces ACP 128, Fisherfaces ACP 512 puis LDA 128, en gris 64 × 64 ; LBP(8, 2) uniforme, grille 7 × 7, sur le carré de 128 px ; limite ajoutée en section 14 |
 | 2026-11-22 | Pilotes sur Colab (T4, puis L4) : effondrement de nsoftmax et arcface avec la recette du ResNet-18 ; 11 variantes mesurées (`runs/variantes/`). Recette retenue (section 7) : recette commune de l'essai du 17 novembre (dropout + linéaire, augmentations légères, SGD Nesterov, weight decay 5e-4, réseau × 0,3, écrêtage 5) ; lots 256 × 1 et tête avec BatchNorm pour nsoftmax et arcface, lots 64 × 4 et tête sans BatchNorm pour contrastive et triplet ; plages resserrées pour nsoftmax et arcface (section 8). Décision d'Arsène |
 | 2026-11-22 | Section 8 : 15 époques au plus par tirage de réglage au lieu de 20, pour le budget (environ 2 min par époque sur L4, 1,94 unité par heure, 94 unités disponibles). Graines finales inchangées (30 époques). Décision d'Arsène |
+| 2026-11-23 | Étapes 4 et 5 sur Colab (L4, deux sessions en parallèle) : réglage, 10 tirages de 15 époques par perte, puis graines 0, 1, 2 de 30 époques ; méthodes classiques (étape 8) ; étape 6, évaluation sur la validation et figures (`runs/20261123-101604_6_eval_val`). Le test n'est pas lu |
+| 2026-11-26 | Les 6 points [à valider] restants sont validés tels qu'appliqués : précision mixte, réglages du pilote, règle du tirage divergé, bornes des plages de nsoftmax et arcface, calcul du bootstrap, corbeille de Drive. Décision d'Arsène |
