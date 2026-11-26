@@ -17,12 +17,18 @@
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     display: flex; flex-direction: column;
   }
-  header { background: var(--navy); color: #fff; padding: 13mm 24mm 10mm; position: relative; }
-  .draft { position: absolute; top: 8mm; right: 24mm; font-size: 17pt; background: #ffd166; color: #3d2e00;
-           padding: 2mm 6mm; border-radius: 3mm; font-weight: 600; }
+  header { background: var(--navy); color: #fff; padding: 9mm 24mm 8mm; position: relative; }
+  .draft { font-size: 15pt; background: #ffd166; color: #3d2e00; padding: 1mm 5mm; border-radius: 3mm;
+           font-weight: 600; margin-left: 4mm; }
+  .topline { font-size: 19pt; color: #b9c3d9; margin-bottom: 5mm; }
+  .group { background: #ffb37a; color: var(--navy); font-weight: 700; padding: 1mm 5mm; border-radius: 3mm; margin-right: 4mm; }
+  .logo { position: absolute; top: 22mm; right: 24mm; width: 120mm; height: 48mm; border: 0.8mm dashed #b9c3d9;
+          border-radius: 4mm; display: flex; align-items: center; justify-content: center; text-align: center;
+          font-size: 18pt; color: #b9c3d9; }
+  .keywords { font-size: 18pt; color: #ffd8b8; margin-top: 2mm; }
   h1 { font-size: 88pt; line-height: 1.0; margin: 0 0 4mm; font-weight: 700; letter-spacing: -0.5pt; }
   h1 em { font-style: normal; color: #ffb37a; }
-  .sub { font-size: 30pt; margin: 0 0 4mm; color: #dfe5f2; }
+  .sub { font-size: 29pt; margin: 0 0 3mm; color: #dfe5f2; }
   .authors { font-size: 20pt; color: #b9c3d9; }
   main { flex: 1; padding: 8mm 24mm 0; display: flex; flex-direction: column; gap: 7mm; }
   h2 { font-size: 38pt; margin: 0 0 2mm; color: var(--navy); line-height: 1.1; }
@@ -69,10 +75,12 @@
 </head>
 <body>
 <header>
-  <div class="draft">DRAFT · validation results · test to come</div>
+  <div class="topline"><span class="group">Group [N]</span> Master Informatique, Aix-Marseille Université · SRD 2026/27 · Subject 09: face recognition algorithms, before and after AI <span class="draft">DRAFT · validation results</span></div>
+  <div class="logo">[AMU logo,<br>new charter]</div>
   <h1>How algorithms shape<br><em>the space of faces</em></h1>
-  <p class="sub">Face recognition before and after AI: where each method puts the photos, and whether that helps recognise people never seen before.</p>
-  <div class="authors">[Author 1] · [Author 2] · [Author 3] · [Author 4] · M1 Computer Science, Aix-Marseille Université · SRD project 09</div>
+  <p class="sub">Where each method puts the photos of faces, and whether that helps recognise people never seen before.</p>
+  <div class="authors"><b>[Member 1] · [Member 2] · [Member 3] · [Member 4]</b> &nbsp;·&nbsp; Expert: [Name] &nbsp;·&nbsp; Contact: [email]</div>
+  <div class="keywords">Keywords: face recognition · metric learning · loss functions · embedding geometry · Eigenfaces · ArcFace · CelebA</div>
 </header>
 
 <main>
@@ -192,7 +200,7 @@
 
 <footer>
   <div>Turk &amp; Pentland 1991 (Eigenfaces) · Belhumeur et al. 1997 (Fisherfaces) · Ahonen et al. 2004 (LBP) · Hadsell et al. 2006 (contrastive) · Schroff et al. 2015 (FaceNet, triplet) · Wang et al. 2017 (NormFace) · Deng et al. 2019 (ArcFace) · Wang &amp; Isola 2020 (alignment, uniformity) · Musgrave et al. 2020 (metric learning reality check) · Liu et al. 2015 (CelebA) · He et al. 2016 (ResNet). Code and protocol: github.com/Arsenicophe/SRD-degel</div>
-  <div class="qr">QR code<br>full results</div>
+  <div class="qr">QR code<br>PDF of this poster</div>
 </footer>
 </body>
 </html>

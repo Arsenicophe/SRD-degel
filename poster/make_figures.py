@@ -132,7 +132,7 @@ def plane_figure(summary: pd.DataFrame) -> None:
     """Alignement contre uniformité (Wang et Isola, 2020), toutes les méthodes à cosinus."""
     t = summary[summary.metric.isin(["alignment", "uniformity"])].pivot(
         index="method", columns="metric", values="mean")
-    fig, ax = plt.subplots(figsize=(480 * MM, 262 * MM))
+    fig, ax = plt.subplots(figsize=(480 * MM, 245 * MM))
     labels = {"eigenfaces": ("Eigenfaces (1991)", (22, 0), "left"),
               "fisherfaces": ("Fisherfaces (1997) and ImageNet + LDA", (0, -42), "center"),
               "brut_acp": ("ImageNet + PCA", (-24, 0), "right"),
