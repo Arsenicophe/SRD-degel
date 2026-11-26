@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Only the loss changes</title>
+<style>
+  @page { size: 841mm 1189mm; margin: 0; }
+  :root {
+    --ink: #1f1f1f; --muted: #5a5a5a; --navy: #14213d; --paper: #ffffff; --soft: #f2f4f8;
+    --arc: #D55E00; --nsm: #0072B2; --con: #009E73; --tri: #CC79A7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); }
+  body {
+    width: 841mm; height: 1189mm; overflow: hidden; color: var(--ink);
+    font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; font-size: 25pt; line-height: 1.3;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    display: flex; flex-direction: column;
+  }
+  header { background: var(--navy); color: #fff; padding: 13mm 24mm 10mm; position: relative; }
+  .draft { position: absolute; top: 8mm; right: 24mm; font-size: 17pt; background: #ffd166; color: #3d2e00;
+           padding: 2mm 6mm; border-radius: 3mm; font-weight: 600; }
+  h1 { font-size: 92pt; line-height: 1.0; margin: 0 0 4mm; font-weight: 700; letter-spacing: -0.5pt; }
+  h1 em { font-style: normal; color: #ffb37a; }
+  .sub { font-size: 31pt; margin: 0 0 4mm; color: #dfe5f2; }
+  .authors { font-size: 20pt; color: #b9c3d9; }
+  main { flex: 1; padding: 9mm 24mm 0; display: flex; flex-direction: column; gap: 8mm; }
+  h2 { font-size: 38pt; margin: 0 0 2mm; color: var(--navy); line-height: 1.1; }
+  h2 small { font-size: 22pt; color: var(--muted); font-weight: 500; margin-left: 3mm; }
+  .cap { font-size: 19pt; color: var(--muted); margin: 1.5mm 0 0; line-height: 1.28; }
+  img { display: block; width: 100%; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 13mm; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 8mm; }
+  .card { background: var(--soft); border-radius: 6mm; padding: 6mm 9mm; }
+  .hero { display: grid; grid-template-columns: 1fr 245mm; gap: 12mm; align-items: center; }
+  .stats { display: grid; gap: 5mm; }
+  .stat { background: var(--soft); border-radius: 6mm; padding: 4mm 8mm; }
+  .stat b { display: block; font-size: 64pt; line-height: 1; color: var(--navy); }
+  .stat span { font-size: 19pt; color: var(--muted); line-height: 1.2; display: block; margin-top: 1mm; }
+  ul { margin: 0; padding-left: 8mm; }
+  li { margin: 0 0 2mm; }
+  .pipe { display: flex; align-items: center; gap: 3mm; margin: 2mm 0 4mm; }
+  .pipe .box { background: #fff; border: 1mm solid #d5d9e3; border-radius: 4mm; padding: 2.5mm 4mm; text-align: center;
+               font-size: 20pt; line-height: 1.1; font-weight: 600; }
+  .pipe .box small { font-weight: 400; color: var(--muted); font-size: 16pt; }
+  .pipe .arrow { font-size: 28pt; color: var(--muted); }
+  .pipe img { width: 30mm; border-radius: 3mm; }
+  .losses { display: grid; grid-template-columns: auto; gap: 1.2mm; }
+  .loss { font-weight: 700; font-size: 17pt; padding: 0.6mm 4mm; border-radius: 2.5mm; color: #fff; text-align: center; }
+  .take { display: grid; grid-template-columns: 255mm 1fr; gap: 12mm; align-items: center; }
+  .take li b { color: var(--navy); }
+  footer { display: grid; grid-template-columns: 1fr 44mm; gap: 10mm; align-items: center;
+           padding: 5mm 24mm 7mm; font-size: 13.5pt; color: var(--muted); line-height: 1.3; border-top: 0.6mm solid #e3e5ea; margin-top: 6mm; }
+  .qr { width: 44mm; height: 44mm; border: 0.8mm dashed #9aa3b5; border-radius: 4mm; display: flex; align-items: center;
+        justify-content: center; text-align: center; font-size: 13pt; color: var(--muted); padding: 3mm; }
+</style>
+</head>
+<body>
+<header>
+  <div class="draft">DRAFT · validation results · test to come</div>
+  <h1>Same faces. Same network.<br><em>Only the loss changes.</em></h1>
+  <p class="sub">How the training loss arranges faces on a sphere, and whether it helps recognise people never seen before.</p>
+  <div class="authors">[Author 1] · [Author 2] · [Author 3] · [Author 4] · M1 Computer Science, Aix-Marseille Université · SRD project 09: face recognition, before and after AI</div>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <h2>Every photo becomes a point on a sphere</h2>
+      <img src="figures/sphere.png" alt="Three spheres: points mixed, tight but crowded groups, groups spread over the sphere">
+      <p class="cap">Schematic in 3-D (our network uses 128-D). One colour = one person. A good loss puts the photos of a person close together <b>and</b> keeps different people far apart.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>×24</b><span>better retrieval once trained on faces (MAP@R 3.0 → 73.8)</span></div>
+      <div class="stat"><b>+30</b><span>MAP@R points from the loss alone (Triplet → ArcFace)</span></div>
+      <div class="stat"><b>0</b><span>people shared between training and evaluation</span></div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div class="col">
+      <div class="card">
+        <h2>The experiment</h2>
+        <div class="pipe">
+          <img src="figures/face_query.png" alt="Face crop">
+          <span class="arrow">→</span>
+          <div class="box">ResNet-18<br><small>from ImageNet</small></div>
+          <span class="arrow">→</span>
+          <div class="box">128-D<br><small>on a sphere</small></div>
+          <span class="arrow">→</span>
+          <div class="losses">
+            <div class="loss" style="background:var(--tri)">Triplet</div>
+            <div class="loss" style="background:var(--con)">Contrastive</div>
+            <div class="loss" style="background:var(--nsm)">Norm. softmax</div>
+            <div class="loss" style="background:var(--arc)">ArcFace</div>
+          </div>
+        </div>
+        <ul>
+          <li>CelebA split <b>by person</b>: 7,689 people to train, 924 never-seen people to evaluate.</li>
+          <li>Same network, recipe and tuning budget (10 trials). <b>Only the loss changes.</b></li>
+          <li>3 seeds per loss, 95% confidence intervals.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Same person or not?</h2>
+        <img src="figures/hills.png" alt="Similarity distributions for same-person and different-person pairs, before and after training">
+        <p class="cap">AUC is 98.6–98.8 for all 4 losses. The gap shows at strict thresholds: at 1 false accept in 1,000, ArcFace accepts 81.7% of true pairs, Triplet 52.9%.</p>
+      </div>
+    </div>
+    <div>
+      <h2>Who is it?</h2>
+      <img src="figures/neighbors.png" alt="A query face and its five nearest photos for each method; green frame = same person, red = different person">
+      <p class="cap">Green = same person, red = someone else. One of 10 random queries (seed 0); counts over all 10.</p>
+    </div>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>Before AI, after AI <small>MAP@R, 924 unseen people</small></h2>
+      <img src="figures/scores.png" alt="Bar chart of MAP@R: classical methods 1 to 13, pretrained network 3 to 5, trained losses 43 to 74">
+      <p class="cap">MAP@R: are the photos ranked first the same person? Bars: 95% CI over 3 seeds. All pairs of losses differ significantly.</p>
+    </div>
+    <div>
+      <h2>4 losses, 4 geometries</h2>
+      <img src="figures/plane.png" alt="Alignment versus uniformity for the four losses">
+      <p class="cap">Measured in 128-D (Wang &amp; Isola, 2020). Lower is better on both axes.</p>
+    </div>
+  </section>
+
+  <section class="take card">
+    <div>
+      <img src="figures/tsne.png" alt="t-SNE of 20 never-seen people before and after training with ArcFace">
+      <p class="cap">t-SNE, 20 unseen people: it keeps neighbours, not distances.</p>
+    </div>
+    <div>
+      <h2>Take-home</h2>
+      <ul>
+        <li><b>Training on faces is the big step:</b> the weakest loss (43.4) beats the best classical method (13.0) by 30 points.</li>
+        <li><b>The loss still matters:</b> 43.4 → 73.8 with everything else identical.</li>
+        <li><b>Tight is not enough:</b> Contrastive builds the tightest groups but crowds people together; the two best losses spread people over the whole sphere.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div>Turk &amp; Pentland 1991 (Eigenfaces) · Belhumeur et al. 1997 (Fisherfaces) · Ahonen et al. 2004 (LBP) · Hadsell et al. 2006 (contrastive) · Schroff et al. 2015 (FaceNet, triplet) · Wang et al. 2017 (NormFace) · Deng et al. 2019 (ArcFace) · Wang &amp; Isola 2020 (alignment, uniformity) · Musgrave et al. 2020 (metric learning reality check) · Liu et al. 2015 (CelebA) · He et al. 2016 (ResNet). Code and protocol: github.com/Arsenicophe/SRD-degel</div>
+  <div class="qr">QR code<br>rotate the sphere in 3-D</div>
+</footer>
+</body>
+</html>

@@ -33,3 +33,8 @@ __pycache__/
 /runs_essai/
 /runs_essai2/
 /runs_essai3/
+
+# Poster : figures et PDF contiennent des photos CelebA, non publiées
+poster/figures/
+poster/*.pdf
+poster/*.png
