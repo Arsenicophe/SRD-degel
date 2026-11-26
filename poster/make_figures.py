@@ -95,14 +95,15 @@ def scores_figure(summary: pd.DataFrame) -> None:
 
 
 def hills_figure(scores, summary: pd.DataFrame) -> None:
-    """Similarités des paires « même personne » et « personnes différentes »."""
+    """Similarités des paires « même personne » et « personnes différentes », avant et après IA."""
     y = scores["y"]
-    mapr = summary[summary.metric == "map_at_r"].set_index("method")["mean"]
+    val = summary.set_index(["method", "metric"])["mean"]
     rng = np.random.default_rng(0)
-    panels = [("brut_acp", "Pretrained, not trained on faces"), ("arcface", "Trained with ArcFace")]
-    fig, axes = plt.subplots(1, 2, figsize=(390 * MM, 150 * MM), sharey=True)
+    panels = [("fisherfaces", "Before AI: Fisherfaces"), ("contrastive", "Contrastive"),
+              ("arcface", "ArcFace")]
+    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 150 * MM), sharey=False)
     bins = np.linspace(-0.6, 1.0, 81)
-    for ax, (m, title) in zip(axes, panels):
+    for i, (ax, (m, title)) in enumerate(zip(axes, panels)):
         s = scores[m].astype(np.float32)
         same, diff = s[y == 1], s[y == 0]
         diff = rng.choice(diff, size=min(len(diff), 200_000), replace=False)
@@ -113,11 +114,14 @@ def hills_figure(scores, summary: pd.DataFrame) -> None:
         ax.fill_between(c, hs, color=color_of(m), alpha=0.75, lw=0, label="same person")
         ax.fill_between(c, np.minimum(hs, hd), facecolor="none", edgecolor=INK, hatch="///",
                         lw=0, label="overlap = errors")
-        ax.set_ylim(0, max(hs.max(), hd.max()) * 1.75)
-        ax.legend(frameon=False, fontsize=17, loc="upper left", handlelength=1.4)
-        ax.set_title(f"{title}\nMAP@R {mapr[m]:.1f}", fontsize=21, loc="left")
-        ax.set_xlabel("similarity of two photos", fontsize=20)
-        ax.set_xticks([-0.5, 0, 0.5, 1])
+        ax.set_ylim(0, max(hs.max(), hd.max()) * (1.9 if i == 0 else 1.15))
+        if i == 0:
+            ax.legend(frameon=False, fontsize=15, loc="upper left", handlelength=1.3)
+        tar = val[(m, "tar_at_far_0.001")]
+        ax.set_title(f"{title}\nTAR {tar:.1f}%", fontsize=19, loc="left", color=color_of(m)
+                     if m in LOSSES else INK)
+        ax.set_xlabel("similarity of two photos", fontsize=17)
+        ax.set_xticks([-0.5, 0, 0.5, 1], ["−0.5", "0", "0.5", "1"], fontsize=15)
         ax.set_yticks([])
         ax.spines["left"].set_visible(False)
     fig.tight_layout()
@@ -125,25 +129,41 @@ def hills_figure(scores, summary: pd.DataFrame) -> None:
 
 
 def plane_figure(summary: pd.DataFrame) -> None:
-    """Alignement contre uniformité (Wang et Isola, 2020) : plus bas = mieux, sur les deux axes."""
+    """Alignement contre uniformité (Wang et Isola, 2020), toutes les méthodes à cosinus."""
     t = summary[summary.metric.isin(["alignment", "uniformity"])].pivot(
         index="method", columns="metric", values="mean")
-    fig, ax = plt.subplots(figsize=(390 * MM, 215 * MM))
-    offsets = {"arcface": (-22, -34), "nsoftmax": (18, 10), "contrastive": (20, -6),
-               "triplet": (20, -6), "brut_acp": (-20, 14)}
-    for m in ["brut_acp", *LOSSES]:
+    fig, ax = plt.subplots(figsize=(480 * MM, 300 * MM))
+    labels = {"eigenfaces": ("Eigenfaces (1991)", (22, 0), "left"),
+              "fisherfaces": ("Fisherfaces (1997) and ImageNet + LDA", (0, -42), "center"),
+              "brut_acp": ("ImageNet + PCA", (-24, 0), "right"),
+              "triplet": ("Triplet", (26, 0), "left"),
+              "contrastive": ("Contrastive", (26, 0), "left"),
+              "nsoftmax": ("Norm. softmax", (24, 18), "left"),
+              "arcface": ("ArcFace", (-24, -26), "right")}
+    for m in ["eigenfaces", "fisherfaces", "lda", "brut_acp", *LOSSES]:
         a, u = t.loc[m, "alignment"], t.loc[m, "uniformity"]
-        big = m in LOSSES
-        ax.scatter(a, u, s=900 if big else 450, color=color_of(m), zorder=3,
-                   edgecolor="white", linewidth=2)
-        name = NAMES[m].replace("-\n", "").replace("\n", " ")
-        dx, dy = offsets[m]
-        ax.annotate(name, (a, u), xytext=(dx, dy), textcoords="offset points", fontsize=24,
-                    ha="right" if dx < 0 else "left", color=INK)
-    ax.set_xlim(0.2, 1.6)
-    ax.set_ylim(-4.2, -1.8)
-    ax.set_xlabel("alignment: distance within a person (lower = tighter groups)", fontsize=20)
-    ax.set_ylabel("uniformity\n(lower = more spread out)", fontsize=20)
+        ax.scatter(a, u, s=1300 if m in LOSSES else 700, color=color_of(m), zorder=3,
+                   edgecolor="white", linewidth=2.5)
+        if m in labels:
+            name, (dx, dy), ha = labels[m]
+            ax.annotate(name, (a, u), xytext=(dx, dy), textcoords="offset points", fontsize=25,
+                        ha=ha, va="center", color=color_of(m) if m in LOSSES else INK,
+                        fontweight="bold" if m in LOSSES else "normal")
+    ax.annotate("", xy=(1.05, -3.35), xytext=(1.5, -3.35),
+                arrowprops={"arrowstyle": "-|>,head_width=0.5,head_length=0.9", "lw": 3,
+                            "color": MUTED})
+    ax.text(1.275, -3.29, "training on faces", ha="center", va="bottom", fontsize=21,
+            color=MUTED, style="italic")
+    ax.text(0.24, -4.08, "ideal corner: each person tight,\ndifferent people far apart",
+            ha="left", va="bottom", fontsize=19, color=MUTED, style="italic")
+    ax.text(1.80, -2.06, "before AI or\nno face training", ha="right", va="top", fontsize=19,
+            color=COLORS["classical"], style="italic")
+    ax.set_xlim(0.2, 1.85)
+    ax.set_ylim(-4.15, -2.0)
+    ax.set_xlabel("alignment: distance between photos of the same person   (lower = tighter)",
+                  fontsize=21)
+    ax.set_ylabel("uniformity   (lower = people more spread out)", fontsize=21)
+    ax.tick_params(labelsize=18)
     ax.grid(True, color="#EEEEEE")
     save(fig, "plane.png")
 
@@ -205,14 +225,15 @@ def neighbors_figure(emb, names: list[str], zip_path: Path, n_queries: int, k: i
 
 
 def tsne_figure(emb, n_ids: int, seed: int, perplexity: float, pca_dim: int) -> None:
-    """Avant / après : 20 personnes jamais vues, une couleur par personne."""
+    """Avant IA, réseau non entraîné, après IA : 20 personnes jamais vues, une couleur chacune."""
     labels = emb["labels"]
     chosen = np.random.default_rng(seed).choice(np.unique(labels), size=n_ids, replace=False)
     keep = np.isin(labels, chosen)
     cmap = plt.get_cmap("tab20")
-    fig, axes = plt.subplots(1, 2, figsize=(260 * MM, 120 * MM))
-    for ax, (m, title) in zip(axes, [("brut_acp", "Before training on faces"),
-                                     ("arcface", "After: trained with ArcFace")]):
+    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 140 * MM))
+    for ax, (m, title) in zip(axes, [("fisherfaces", "Before AI: Fisherfaces"),
+                                     ("brut_acp", "ImageNet, no face training"),
+                                     ("arcface", "Trained with ArcFace")]):
         x = emb[m][keep].astype(np.float32)
         x /= np.linalg.norm(x, axis=1, keepdims=True)
         x = PCA(pca_dim, random_state=seed).fit_transform(x)
@@ -220,70 +241,12 @@ def tsne_figure(emb, n_ids: int, seed: int, perplexity: float, pca_dim: int) -> 
         _, idx = np.unique(labels[keep], return_inverse=True)
         ax.scatter(xy[:, 0], xy[:, 1], c=[cmap(i % 20) for i in idx], s=40,
                    edgecolor="white", linewidth=0.5)
-        ax.set_title(title, fontsize=19, loc="left")
+        ax.set_title(title, fontsize=17, loc="left")
         ax.set_xticks([])
         ax.set_yticks([])
         for side in ax.spines.values():
             side.set_visible(False)
     save(fig, "tsne.png")
-
-
-def sphere_panel(ax, pts, cols, title: str, yaw=0.5, pitch=-0.35) -> None:
-    """Sphère éclairée vue de face ; points de la face visible seulement."""
-    n = 600
-    g = np.linspace(-1, 1, n)
-    X, Y = np.meshgrid(g, -g)
-    inside = X ** 2 + Y ** 2 <= 1
-    Z = np.sqrt(np.clip(1 - X ** 2 - Y ** 2, 0, None))
-    light = np.array([-0.45, 0.55, 0.7])
-    light /= np.linalg.norm(light)
-    shade = 0.55 + 0.45 * np.clip(X * light[0] + Y * light[1] + Z * light[2], 0, 1)
-    base = np.array([0.93, 0.94, 0.97])
-    img = np.ones((n, n, 4))
-    img[..., :3] = base * shade[..., None]
-    img[..., 3] = inside
-    ax.imshow(img, extent=(-1, 1, -1, 1), zorder=1)
-    ax.add_patch(plt.Circle((0, 0), 1, fill=False, color="#B8BCC8", lw=1.5, zorder=2))
-    cy, sy, cp, sp = np.cos(yaw), np.sin(yaw), np.cos(pitch), np.sin(pitch)
-    x = pts[:, 0] * cy - pts[:, 2] * sy
-    z = pts[:, 0] * sy + pts[:, 2] * cy
-    y = pts[:, 1] * cp - z * sp
-    z2 = pts[:, 1] * sp + z * cp
-    order = np.argsort(z2)
-    for i in order:
-        if z2[i] < -0.05:
-            continue
-        ax.scatter(x[i], y[i], s=60 + 140 * z2[i], color=cols[i], edgecolor="white",
-                   linewidth=0.8, zorder=3, alpha=0.45 + 0.55 * max(z2[i], 0))
-    ax.set_xlim(-1.08, 1.08)
-    ax.set_ylim(-1.08, 1.08)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.set_title(title, fontsize=28, pad=10)
-
-
-def sphere_figure() -> None:
-    """Schéma, pas des données : 8 personnes, 14 photos chacune, sur une sphère en 3D."""
-    rng = np.random.default_rng(11)
-
-    def nm(v):
-        return v / np.linalg.norm(v, axis=-1, keepdims=True)
-
-    cube = nm(np.array([[a, b, c] for a in (-1, 1) for b in (-1, 1) for c in (-1, 1)], float))
-    tight = nm(cube * 0.38 + np.array([0, 1, 0]))
-    pal = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#7F3C8D", "#8C6D31"]
-    k, p = 8, 14
-    cols = [pal[i] for i in range(k) for _ in range(p)]
-    mixed = nm(rng.normal(size=(k * p, 3)))
-    crowded = nm(np.repeat(tight, p, 0) + 0.06 * rng.normal(size=(k * p, 3)))
-    spread = nm(np.repeat(cube, p, 0) + 0.2 * rng.normal(size=(k * p, 3)))
-    fig, axes = plt.subplots(1, 3, figsize=(520 * MM, 165 * MM))
-    views = [(0.5, -0.35), (0.3, 1.05), (0.5, -0.35)]
-    for ax, pts, title, (yaw, pitch) in zip(axes, [mixed, crowded, spread],
-                                            ["Untrained: people mixed", "Tight but crowded",
-                                             "Spread over the sphere"], views):
-        sphere_panel(ax, pts, cols, title, yaw, pitch)
-    save(fig, "sphere.png")
 
 
 def main() -> None:
@@ -302,7 +265,6 @@ def main() -> None:
     scores_figure(summary)
     hills_figure(np.load(ev / "scores_seed0.npz"), summary)
     plane_figure(summary)
-    sphere_figure()
     tsne_figure(emb, n_ids=20, seed=0, perplexity=30, pca_dim=50)
     counts = neighbors_figure(emb, names, Path(args.celeba_zip), n_queries=10, k=5, seed=0,
                               show=2)
