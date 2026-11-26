@@ -193,9 +193,13 @@ uniformité.
 
 | Version | MAP@R | P@1 | R-Precision | AUC | TAR à FAR 10⁻³ | Alignement | Uniformité |
 |---|---|---|---|---|---|---|---|
-| brut (512) | 3,02 | 23,3 | 5,70 | 74,8 | 2,9 | 0,32 | −0,84 |
+| brut (512), non rapporté* | 3,02 | 23,3 | 5,70 | 74,8 | 2,9 | 0,32 | −0,84 |
 | brut (ACP 128) | 3,01 | 22,0 | 5,75 | 81,1 | 3,7 | 1,43 | −3,56 |
 | LDA 128 | 5,13 | 30,3 | 9,05 | 82,9 | 8,8 | 1,66 | −3,91 |
+
+\* Le brut en 512 dimensions n'était pas prévu (section 2 : brut ACP 128 et LDA) et n'est pas
+rapporté dans les résultats : la référence non entraînée est l'ACP 128, de même dimension que la
+tête. Décision du 26 novembre.
 
 Lecture : le brut (3,0) est un peu sous celui de l'ancien ResNet-50 Barlow Twins
 gelé (4,01), et la LDA ne gagne que 2 points sur le brut (5,13, contre 13,23
@@ -606,3 +610,4 @@ conditions proches de son article d'origine.
 | 2026-11-22 | Section 8 : 15 époques au plus par tirage de réglage au lieu de 20, pour le budget (environ 2 min par époque sur L4, 1,94 unité par heure, 94 unités disponibles). Graines finales inchangées (30 époques). Décision d'Arsène |
 | 2026-11-23 | Étapes 4 et 5 sur Colab (L4, deux sessions en parallèle) : réglage, 10 tirages de 15 époques par perte, puis graines 0, 1, 2 de 30 époques ; méthodes classiques (étape 8) ; étape 6, évaluation sur la validation et figures (`runs/20261123-101604_6_eval_val`). Le test n'est pas lu |
 | 2026-11-26 | Les 6 points [à valider] restants sont validés tels qu'appliqués : précision mixte, réglages du pilote, règle du tirage divergé, bornes des plages de nsoftmax et arcface, calcul du bootstrap, corbeille de Drive. Décision d'Arsène |
+| 2026-11-26 | Le brut en 512 dimensions, calculé en plus par erreur, n'est pas rapporté (section 5) : la référence non entraînée est le brut ACP 128. Figures du poster et de la synthèse en anglais. Décision d'Arsène |
