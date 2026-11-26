@@ -66,7 +66,7 @@ def scores_figure(summary: pd.DataFrame) -> None:
     groups = [("before deep learning", ["eigenfaces", "lbp", "fisherfaces"]),
               ("pretrained,\nno face training", ["brut_acp", "lda"]),
               ("trained on faces", LOSSES)]
-    fig, ax = plt.subplots(figsize=(390 * MM, 215 * MM))
+    fig, ax = plt.subplots(figsize=(390 * MM, 185 * MM))
     x, ticks, labels = 0.0, [], []
     for title, methods in groups:
         start = x
@@ -101,7 +101,7 @@ def hills_figure(scores, summary: pd.DataFrame) -> None:
     rng = np.random.default_rng(0)
     panels = [("fisherfaces", "Before AI: Fisherfaces"), ("contrastive", "Contrastive"),
               ("arcface", "ArcFace")]
-    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 150 * MM), sharey=False)
+    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 136 * MM), sharey=False)
     bins = np.linspace(-0.6, 1.0, 81)
     for i, (ax, (m, title)) in enumerate(zip(axes, panels)):
         s = scores[m].astype(np.float32)
@@ -132,14 +132,14 @@ def plane_figure(summary: pd.DataFrame) -> None:
     """Alignement contre uniformité (Wang et Isola, 2020), toutes les méthodes à cosinus."""
     t = summary[summary.metric.isin(["alignment", "uniformity"])].pivot(
         index="method", columns="metric", values="mean")
-    fig, ax = plt.subplots(figsize=(480 * MM, 300 * MM))
+    fig, ax = plt.subplots(figsize=(480 * MM, 262 * MM))
     labels = {"eigenfaces": ("Eigenfaces (1991)", (22, 0), "left"),
               "fisherfaces": ("Fisherfaces (1997) and ImageNet + LDA", (0, -42), "center"),
               "brut_acp": ("ImageNet + PCA", (-24, 0), "right"),
               "triplet": ("Triplet", (26, 0), "left"),
               "contrastive": ("Contrastive", (26, 0), "left"),
               "nsoftmax": ("Norm. softmax", (24, 18), "left"),
-              "arcface": ("ArcFace", (-24, -26), "right")}
+              "arcface": ("ArcFace", (-24, 24), "right")}
     for m in ["eigenfaces", "fisherfaces", "lda", "brut_acp", *LOSSES]:
         a, u = t.loc[m, "alignment"], t.loc[m, "uniformity"]
         ax.scatter(a, u, s=1300 if m in LOSSES else 700, color=color_of(m), zorder=3,
@@ -196,7 +196,7 @@ def neighbors_figure(emb, names: list[str], zip_path: Path, n_queries: int, k: i
                 rows.append((m, q, nn))
         counts[m] = f"{hits}/{n_queries * k}"
     faces = read_faces(zip_path, [names[i] for _, q, nn in rows for i in [q, *nn]])
-    fig, axes = plt.subplots(len(rows), k + 2, figsize=(390 * MM, 290 * MM),
+    fig, axes = plt.subplots(len(rows), k + 2, figsize=(390 * MM, 270 * MM),
                              gridspec_kw={"width_ratios": [1.9, 1, *[1] * k]})
     for r, (m, q, nn) in enumerate(rows):
         ax = axes[r, 0]
@@ -230,7 +230,7 @@ def tsne_figure(emb, n_ids: int, seed: int, perplexity: float, pca_dim: int) -> 
     chosen = np.random.default_rng(seed).choice(np.unique(labels), size=n_ids, replace=False)
     keep = np.isin(labels, chosen)
     cmap = plt.get_cmap("tab20")
-    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 140 * MM))
+    fig, axes = plt.subplots(1, 3, figsize=(390 * MM, 108 * MM))
     for ax, (m, title) in zip(axes, [("fisherfaces", "Before AI: Fisherfaces"),
                                      ("brut_acp", "ImageNet, no face training"),
                                      ("arcface", "Trained with ArcFace")]):

@@ -24,7 +24,7 @@
   h1 em { font-style: normal; color: #ffb37a; }
   .sub { font-size: 30pt; margin: 0 0 4mm; color: #dfe5f2; }
   .authors { font-size: 20pt; color: #b9c3d9; }
-  main { flex: 1; padding: 9mm 24mm 0; display: flex; flex-direction: column; gap: 8mm; }
+  main { flex: 1; padding: 8mm 24mm 0; display: flex; flex-direction: column; gap: 7mm; }
   h2 { font-size: 38pt; margin: 0 0 2mm; color: var(--navy); line-height: 1.1; }
   h2 small { font-size: 22pt; color: var(--muted); font-weight: 500; margin-left: 3mm; }
   .cap { font-size: 19pt; color: var(--muted); margin: 1.5mm 0 0; line-height: 1.28; }
@@ -50,8 +50,19 @@
   .losses { display: grid; gap: 1.2mm; }
   .loss { font-weight: 700; font-size: 17pt; padding: 0.6mm 4mm; border-radius: 2.5mm; color: #fff; text-align: center; }
   .take li b { color: var(--navy); }
+  .losses4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8mm; }
+  .lf h3 { margin: 0 0 1.5mm; font-size: 27pt; }
+  .math { font-family: "Times New Roman", "STIX Two Math", serif; font-style: italic; font-size: 23pt;
+          background: #fff; border-radius: 3mm; padding: 2mm 3mm; margin: 0 0 2mm; white-space: nowrap;
+          display: flex; align-items: center; gap: 1.5mm; min-height: 20mm; }
+  .math .up { font-size: 15pt; vertical-align: super; }
+  .frac { display: inline-flex; flex-direction: column; align-items: center; font-size: 19pt; line-height: 1.15; }
+  .frac > span:first-child { border-bottom: 0.4mm solid var(--ink); padding: 0 1mm; }
+  .lf p { margin: 0; font-size: 18pt; line-height: 1.25; }
+  .lf p.effect { margin-top: 1.5mm; font-weight: 600; color: var(--navy); }
+  .notation { font-size: 16pt; color: var(--muted); margin: 3mm 0 0; }
   footer { display: grid; grid-template-columns: 1fr 44mm; gap: 10mm; align-items: center;
-           padding: 5mm 24mm 7mm; font-size: 13.5pt; color: var(--muted); line-height: 1.3; border-top: 0.6mm solid #e3e5ea; margin-top: 6mm; }
+           padding: 5mm 24mm 7mm; font-size: 13.5pt; color: var(--muted); line-height: 1.3; border-top: 0.6mm solid #e3e5ea; margin-top: 3mm; }
   .qr { width: 44mm; height: 44mm; border: 0.8mm dashed #9aa3b5; border-radius: 4mm; display: flex; align-items: center;
         justify-content: center; text-align: center; font-size: 13pt; color: var(--muted); padding: 3mm; }
 </style>
@@ -87,6 +98,37 @@
     </div>
   </section>
 
+  <section class="card">
+    <h2>The 4 losses: what each one asks of the space <small>tuned values</small></h2>
+    <div class="losses4">
+      <div class="lf">
+        <h3 style="color:var(--tri)">Triplet</h3>
+        <div class="math">L = [ d(a,p) − d(a,n) + m ]<sub>+</sub></div>
+        <p>Each photo must be closer to its own person than to another one, by a margin m = 0.04.</p>
+        <p class="effect">A relative rule: tight groups, people moderately spread.</p>
+      </div>
+      <div class="lf">
+        <h3 style="color:var(--con)">Contrastive</h3>
+        <div class="math">L = [ d(a,p) − m<sub>+</sub> ]<sub>+</sub> + [ m<sub>−</sub> − d(a,n) ]<sub>+</sub></div>
+        <p>Pulls two photos of a person closer than m<sub>+</sub> = 0.40; pushes other people beyond m<sub>−</sub> = 0.65, then stops.</p>
+        <p class="effect">Very tight groups, but people only need to be a little apart: crowding.</p>
+      </div>
+      <div class="lf">
+        <h3 style="color:var(--nsm)">Norm. softmax</h3>
+        <div class="math">L = −log <span class="frac"><span>e<sup>s cos θ<sub>y</sub></sup></span><span>Σ<sub>j</sub> e<sup>s cos θ<sub>j</sub></sup></span></span></div>
+        <p>Each training person has a point on the sphere. A photo is pulled to its own and pushed from all 7,689 others (s = 31).</p>
+        <p class="effect">People spread over the whole sphere.</p>
+      </div>
+      <div class="lf">
+        <h3 style="color:var(--arc)">ArcFace</h3>
+        <div class="math">L = −log <span class="frac"><span>e<sup>s cos(θ<sub>y</sub> + m)</sup></span><span>e<sup>s cos(θ<sub>y</sub> + m)</sup> + Σ<sub>j≠y</sub> e<sup>s cos θ<sub>j</sub></sup></span></span></div>
+        <p>Same, but the photo must win even with an extra angle m = 0.45 rad (≈ 26°), s = 37.</p>
+        <p class="effect">Spread like softmax, with tighter groups.</p>
+      </div>
+    </div>
+    <p class="notation">a: a photo · p: another photo of the same person · n: a photo of someone else · d: distance on the sphere · θ<sub>j</sub>: angle between a photo and person j · [x]<sub>+</sub> = max(x, 0). The effects are read from the formulas and agree with the map; they are an interpretation, not a proof.</p>
+  </section>
+
   <section class="two">
     <div class="col">
       <div class="card">
@@ -107,7 +149,7 @@
         </div>
         <ul>
           <li>CelebA split <b>by person</b>: 7,689 people to train, 924 never-seen people to evaluate. No one in both.</li>
-          <li>Same network, recipe and tuning budget (10 trials). <b>Only the loss changes.</b> 3 seeds each.</li>
+          <li>Fair comparison after Musgrave et al. (2020): same network, recipe and tuning budget (10 trials). <b>Only the loss changes.</b> 3 seeds each.</li>
           <li>Before AI: Eigenfaces, Fisherfaces, LBP, on the same photos.</li>
         </ul>
       </div>
@@ -133,7 +175,7 @@
     <div class="col">
       <div>
         <img src="figures/tsne.png" alt="t-SNE of 20 never-seen people for Fisherfaces, the pretrained network and ArcFace">
-        <p class="cap">t-SNE, 20 unseen people, one colour each. It keeps neighbours, not distances: group sizes are not comparable.</p>
+        <p class="cap">How each method groups the photos of the same person: t-SNE of 20 unseen people, one colour each. Only neighbours are meaningful on this picture.</p>
       </div>
       <div class="card take">
         <h2>Take-home</h2>
@@ -142,6 +184,7 @@
           <li><b>Training on faces pulls each person together</b>: +30 points over the best classical method.</li>
           <li><b>The loss shapes the rest:</b> the tightest groups (Contrastive) crowd people together; the best losses balance tight and spread.</li>
         </ul>
+        <p class="cap">Limits: one dataset (CelebA), one network (ResNet-18), validation numbers until the test set is read once.</p>
       </div>
     </div>
   </section>
